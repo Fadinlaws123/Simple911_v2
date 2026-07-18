@@ -147,28 +147,36 @@ function clearCards() {
 }
 
 function recentCallStatus(call) {
-    if (call.status === 'onscene') return { label: 'ON SCENE', className: 'recent-onscene' };
-    if (call.status === 'enroute') return { label: 'EN ROUTE', className: 'recent-enroute' };
-    return { label: 'NEW', className: 'recent-new' };
+    if (call.status === 'onscene') return { label: 'ON SCENE', className: 'recent-onscene', icon: '✓' };
+    if (call.status === 'enroute') return { label: 'EN ROUTE', className: 'recent-enroute', icon: '↗' };
+    return { label: 'NEW', className: 'recent-new', icon: '!' };
 }
 
 function recentActionButtons(call, role) {
     const active = call.status === 'enroute' || call.status === 'onscene';
+    const keepOpen = 'data-keep-open="true"';
+
     if (!active) {
-        return `<button class="recent-action primary-action" data-action="respondCall" data-call-id="${call.id}">Respond & Waypoint</button>`;
+        return `<button class="recent-action primary-action" data-action="respondCall" data-call-id="${call.id}" ${keepOpen}>Respond & Waypoint</button>`;
     }
     if (role === 'primary') {
-        return `<button class="recent-action secondary-action" data-action="waypoint" data-call-id="${call.id}">Waypoint</button><button class="recent-action danger-action" data-action="closeCallout" data-call-id="${call.id}">Close Callout</button>`;
+        return `<button class="recent-action secondary-action" data-action="waypoint" data-call-id="${call.id}" ${keepOpen}>Waypoint</button><button class="recent-action danger-action" data-action="closeCallout" data-call-id="${call.id}" ${keepOpen}>Close Callout</button>`;
     }
     if (role === 'attached') {
-        return `<button class="recent-action secondary-action" data-action="waypoint" data-call-id="${call.id}">Waypoint</button><button class="recent-action secondary-action" data-action="detachCall" data-call-id="${call.id}">Detach</button>`;
+        return `<button class="recent-action secondary-action" data-action="waypoint" data-call-id="${call.id}" ${keepOpen}>Waypoint</button><button class="recent-action secondary-action" data-action="detachCall" data-call-id="${call.id}" ${keepOpen}>Detach</button>`;
     }
-    return `<button class="recent-action secondary-action" data-action="waypoint" data-call-id="${call.id}">Waypoint</button><button class="recent-action primary-action" data-action="attachCall" data-call-id="${call.id}">Attach & Waypoint</button>`;
+    return `<button class="recent-action secondary-action" data-action="waypoint" data-call-id="${call.id}" ${keepOpen}>Waypoint</button><button class="recent-action primary-action" data-action="attachCall" data-call-id="${call.id}" ${keepOpen}>Attach & Waypoint</button>`;
+}
+
+function attachedUnitsText(call) {
+    const units = call.attachedUnits || [];
+    if (!units.length) return '<span class="recent-empty-copy">No additional units attached</span>';
+    return units.slice(0, 3).map(unit => `<span class="recent-unit-chip">${escapeHtml(unit.name)}</span>`).join('') + (units.length > 3 ? `<span class="recent-unit-chip">+${units.length - 3}</span>` : '');
 }
 
 function renderRecentCalls() {
     if (!recentCalls.length) {
-        callsList.innerHTML = `<div class="empty-state"><div class="empty-icon">✓</div><h3>No recent 911 calls</h3><p>Nothing active right now. Enjoy the suspiciously peaceful five minutes.</p></div>`;
+        callsList.innerHTML = `<div class="empty-state"><div class="empty-icon">✓</div><h3>No active 911 calls</h3><p>Nothing waiting for a response right now. Suspiciously peaceful, but we will take it.</p></div>`;
         return;
     }
 
@@ -176,25 +184,48 @@ function renderRecentCalls() {
         const status = recentCallStatus(call);
         const role = getRole(call, recentSelfServerId);
         const primary = call.primaryUnit?.name || 'Unassigned';
-        const attached = call.attachedUnits || [];
+        const roleLabel = role === 'primary' ? 'PRIMARY UNIT' : role === 'attached' ? 'ATTACHED UNIT' : null;
+
         return `
             <article class="recent-call-card ${status.className}">
                 <div class="recent-call-accent"></div>
                 <div class="recent-call-main">
-                    <div class="recent-call-top">
-                        <div class="recent-call-title"><span class="recent-call-number">911 CALL #${call.id}</span><span class="recent-status-pill">${status.label}</span></div>
+                    <div class="recent-call-header">
+                        <div class="recent-status-icon">${status.icon}</div>
+                        <div class="recent-call-heading-group">
+                            <div class="recent-call-title-row">
+                                <span class="recent-call-number">911 CALL #${call.id}</span>
+                                <span class="recent-status-pill">${status.label}</span>
+                                ${roleLabel ? `<span class="recent-role-badge">YOU: ${roleLabel}</span>` : ''}
+                            </div>
+                            <strong class="recent-call-location">${escapeHtml(call.location)}</strong>
+                        </div>
                         <span class="recent-time">${relativeTime(call.createdAt)}</span>
                     </div>
-                    <div class="recent-card-grid">
-                        <div class="recent-info-block recent-location-block"><span class="recent-info-label">LOCATION</span><strong>${escapeHtml(call.location)}</strong></div>
-                        <div class="recent-info-block"><span class="recent-info-label">CALL DETAILS</span><p>${escapeHtml(call.message)}</p></div>
+
+                    <div class="recent-detail-card">
+                        <span class="recent-section-label">CALL DETAILS</span>
+                        <p>${escapeHtml(call.message)}</p>
                     </div>
-                    <div class="recent-response-row">
-                        <div class="recent-response-info">
-                            <span class="recent-info-label">PRIMARY UNIT</span>
+
+                    <div class="recent-response-grid">
+                        <div class="recent-unit-card">
+                            <span class="recent-section-label">PRIMARY UNIT</span>
                             <strong>${escapeHtml(primary)}</strong>
-                            <span class="recent-attached">${attached.length} attached</span>
-                            ${role !== 'observer' ? `<span class="recent-role">YOU: ${role.toUpperCase()}</span>` : ''}
+                        </div>
+                        <div class="recent-unit-card">
+                            <span class="recent-section-label">ATTACHED UNITS</span>
+                            <div class="recent-unit-list">${attachedUnitsText(call)}</div>
+                        </div>
+                    </div>
+
+                    ${call.status === 'onscene' && call.onSceneBy ? `<div class="recent-onscene-note"><span>✓</span> On scene confirmed by <strong>${escapeHtml(call.onSceneBy.name)}</strong></div>` : ''}
+
+                    <div class="recent-card-footer">
+                        <div class="recent-card-meta">
+                            <span>${(call.attachedUnits || []).length} attached</span>
+                            <span>•</span>
+                            <span>${role === 'observer' ? 'Not assigned to you' : `You are ${role}`}</span>
                         </div>
                         <div class="recent-actions">${recentActionButtons(call, role)}</div>
                     </div>
@@ -206,7 +237,7 @@ function renderRecentCalls() {
         button.addEventListener('click', () => {
             const callId = Number(button.dataset.callId);
             const action = button.dataset.action;
-            post(action, { callId });
+            post(action, { callId, keepPanelOpen: button.dataset.keepOpen === 'true' });
         });
     });
 }
