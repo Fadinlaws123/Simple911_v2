@@ -1,7 +1,7 @@
 local uiOpen = false
-local dispatchOpen = false
 local onDuty = false
 local calls = {}
+local units = {}
 local callBlips = {}
 
 local function notify(message, kind)
@@ -27,7 +27,6 @@ end
 local function openCaller(serviceId)
     local location, coords = getLocationData()
     setFocus(true)
-    dispatchOpen = false
     SendNUIMessage({
         action = 'openCaller',
         serviceId = serviceId,
@@ -39,14 +38,12 @@ local function openCaller(serviceId)
 end
 
 local function openDispatch()
-    dispatchOpen = true
     setFocus(true)
-    SendNUIMessage({ action = 'openDispatch', calls = calls, onDuty = onDuty })
-    if onDuty then TriggerServerEvent('simple911:server:requestCalls') end
+    SendNUIMessage({ action = 'openDispatch', calls = calls, units = units, onDuty = onDuty, settings = Config.Dispatch })
+    if onDuty then TriggerServerEvent('simple911:server:requestDispatch') end
 end
 
 local function closeUi()
-    dispatchOpen = false
     setFocus(false)
     SendNUIMessage({ action = 'close' })
 end
@@ -74,7 +71,7 @@ local function updateBlips()
                 SetBlipScale(blip, Config.Blips.scale)
                 SetBlipAsShortRange(blip, Config.Blips.shortRange)
                 BeginTextCommandSetBlipName('STRING')
-                AddTextComponentString(('Call #%s - %s'):format(call.id, call.title))
+                AddTextComponentString(('P%s | #%s %s'):format(call.priority, call.id, call.title))
                 EndTextCommandSetBlipName(blip)
                 callBlips[call.id] = blip
             end
@@ -87,18 +84,12 @@ local function updateBlips()
 end
 
 for _, service in ipairs(Config.Services) do
-    RegisterCommand(service.command, function()
-        openCaller(service.id)
-    end, false)
+    RegisterCommand(service.command, function() openCaller(service.id) end, false)
 end
 
-RegisterCommand(Config.Commands.dispatch, function()
-    openDispatch()
-end, false)
-
-RegisterCommand(Config.Commands.toggleDuty, function()
-    TriggerServerEvent('simple911:server:setDuty', not onDuty)
-end, false)
+RegisterCommand(Config.Commands.dispatch, function() openDispatch() end, false)
+RegisterCommand(Config.Commands.toggleDuty, function() TriggerServerEvent('simple911:server:setDuty', not onDuty) end, false)
+RegisterCommand(Config.Commands.cancelLastCall, function() TriggerServerEvent('simple911:server:cancelLastCall') end, false)
 
 RegisterNUICallback('close', function(_, cb)
     closeUi()
@@ -130,13 +121,18 @@ RegisterNUICallback('dispatchAction', function(data, cb)
             end
         end
     else
-        TriggerServerEvent('simple911:server:updateCallStatus', data.callId, data.action)
+        TriggerServerEvent('simple911:server:updateCall', data.callId, data.action, data.payload or {})
     end
     cb({ ok = true })
 end)
 
 RegisterNUICallback('toggleDuty', function(_, cb)
     TriggerServerEvent('simple911:server:setDuty', not onDuty)
+    cb({ ok = true })
+end)
+
+RegisterNUICallback('setCallsign', function(data, cb)
+    TriggerServerEvent('simple911:server:setCallsign', data.callsign)
     cb({ ok = true })
 end)
 
@@ -147,25 +143,22 @@ end)
 RegisterNetEvent('simple911:client:dutyChanged', function(state)
     onDuty = state == true
     notify(onDuty and 'You are now on dispatch duty.' or 'You are now off dispatch duty.', onDuty and 'success' or 'info')
-    if not onDuty then calls = {} end
+    if not onDuty then calls = {} units = {} end
     updateBlips()
     SendNUIMessage({ action = 'dutyChanged', onDuty = onDuty })
 end)
 
-RegisterNetEvent('simple911:client:syncCalls', function(serverCalls)
+RegisterNetEvent('simple911:client:syncDispatch', function(serverCalls, serverUnits)
     calls = serverCalls or {}
+    units = serverUnits or {}
     updateBlips()
-    SendNUIMessage({ action = 'syncCalls', calls = calls })
+    SendNUIMessage({ action = 'syncDispatch', calls = calls, units = units })
 end)
 
 RegisterNetEvent('simple911:client:newCall', function(call)
-    calls[#calls + 1] = call
-    table.sort(calls, function(a, b) return a.id > b.id end)
-    updateBlips()
     if Config.Notifications.newCall then
-        notify(('New %s call #%s: %s'):format(call.serviceId, call.id, call.title), 'emergency')
+        notify(('Priority %s | New %s call #%s: %s'):format(call.priority, call.serviceId, call.id, call.title), 'emergency')
     end
-    SendNUIMessage({ action = 'syncCalls', calls = calls })
 end)
 
 CreateThread(function()
