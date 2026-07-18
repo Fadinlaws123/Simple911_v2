@@ -1,7 +1,13 @@
 local TrackedCalls = {}
 
+local function webhookConfigured()
+    return Config.Discord
+        and type(Config.Discord.webhook) == 'string'
+        and Config.Discord.webhook ~= ''
+end
+
 local function discordEnabled()
-    return Config.Discord and Config.Discord.enabled and type(Config.Discord.webhook) == 'string' and Config.Discord.webhook ~= ''
+    return webhookConfigured() and Config.Discord.enabled ~= false
 end
 
 local function baseWebhookUrl()
@@ -9,8 +15,11 @@ local function baseWebhookUrl()
 end
 
 local function webhookCreateUrl()
-    local base = baseWebhookUrl()
-    return base .. '?wait=true'
+    return baseWebhookUrl() .. '?wait=true'
+end
+
+local function log(message)
+    print(('[Simple911 Discord] %s'):format(message))
 end
 
 local function statusMeta(status, closedBy)
@@ -38,11 +47,19 @@ end
 
 local function activityText(activity)
     if not activity or #activity == 0 then return '> No activity recorded yet.' end
-    local maximum = Config.Discord.maxActivityEntries or 8
+
+    local maximum = (Config.Discord and Config.Discord.maxActivityEntries) or 8
     local first = math.max(1, #activity - maximum + 1)
     local lines = {}
-    for index = first, #activity do lines[#lines + 1] = activity[index] end
-    if first > 1 then table.insert(lines, 1, ('*%s earlier event(s) hidden*'):format(first - 1)) end
+
+    for index = first, #activity do
+        lines[#lines + 1] = activity[index]
+    end
+
+    if first > 1 then
+        table.insert(lines, 1, ('*%s earlier event(s) hidden*'):format(first - 1))
+    end
+
     return table.concat(lines, '\n')
 end
 
@@ -109,19 +126,21 @@ end
 
 local function request(url, method, payload, callback)
     PerformHttpRequest(url, function(statusCode, body, headers)
-        if Config.Debug then
-            print(('[Simple911 Discord] %s %s -> %s'):format(method, url, statusCode))
-            if statusCode < 200 or statusCode >= 300 then
-                print(('[Simple911 Discord] Response: %s'):format(body or ''))
-            end
+        log(('%s request returned HTTP %s'):format(method, tostring(statusCode)))
+
+        if statusCode < 200 or statusCode >= 300 then
+            log(('Discord response: %s'):format(body or '<empty response>'))
         end
+
         if callback then callback(statusCode, body, headers) end
     end, method, json.encode(payload), { ['Content-Type'] = 'application/json' })
 end
 
 local function unitMap(units)
     local map = {}
-    for _, unit in ipairs(units or {}) do map[tostring(unit.source)] = unit.name end
+    for _, unit in ipairs(units or {}) do
+        map[tostring(unit.source)] = unit.name
+    end
     return map
 end
 
@@ -161,11 +180,15 @@ local function processChanges(tracked, call)
     end
 
     for source, name in pairs(currentAttached) do
-        if not tracked.attached[source] then addActivity(tracked, '➕', ('%s attached to the incident'):format(name)) end
+        if not tracked.attached[source] then
+            addActivity(tracked, '➕', ('%s attached to the incident'):format(name))
+        end
     end
 
     for source, name in pairs(tracked.attached) do
-        if not currentAttached[source] then addActivity(tracked, '➖', ('%s detached from the incident'):format(name)) end
+        if not currentAttached[source] then
+            addActivity(tracked, '➖', ('%s detached from the incident'):format(name))
+        end
     end
 
     if tracked.status ~= call.status then
@@ -192,7 +215,7 @@ local function editLiveMessage(tracked, call, closedBy)
     end
 
     request(('%s/messages/%s'):format(baseWebhookUrl(), tracked.messageId), 'PATCH', {
-        username = Config.Discord.username,
+        username = Config.Discord.username or 'Simple911',
         avatar_url = Config.Discord.avatarUrl ~= '' and Config.Discord.avatarUrl or nil,
         embeds = { mainEmbed(call, tracked.activity, closedBy) }
     })
@@ -200,10 +223,17 @@ end
 
 local function createLiveMessage(call, tracked)
     if tracked.creating or tracked.messageId then return end
+
+    if not discordEnabled() then
+        log(('Call #%s was not logged because Discord logging is disabled or no webhook is configured.'):format(call.id))
+        return
+    end
+
     tracked.creating = true
+    log(('Creating Discord log for call #%s...'):format(call.id))
 
     request(webhookCreateUrl(), 'POST', {
-        username = Config.Discord.username,
+        username = Config.Discord.username or 'Simple911',
         avatar_url = Config.Discord.avatarUrl ~= '' and Config.Discord.avatarUrl or nil,
         embeds = { mainEmbed(call, tracked.activity) }
     }, function(statusCode, body)
@@ -211,8 +241,10 @@ local function createLiveMessage(call, tracked)
 
         if statusCode >= 200 and statusCode < 300 and body and body ~= '' then
             local ok, decoded = pcall(json.decode, body)
-            if ok and decoded and decoded.id and TrackedCalls[call.id] then
+            if ok and decoded and decoded.id then
                 tracked.messageId = decoded.id
+                log(('Created Discord log for call #%s as message %s.'):format(call.id, decoded.id))
+
                 if tracked.pendingEdit then
                     tracked.pendingEdit = false
                     local closeBy = tracked.pendingCloseBy
@@ -223,13 +255,12 @@ local function createLiveMessage(call, tracked)
             end
         end
 
-        if Config.Debug then
-            print(('[Simple911 Discord] Failed to create live message for call #%s. HTTP %s'):format(call.id, statusCode))
-        end
+        log(('Failed to create Discord log for call #%s. HTTP %s. Body: %s'):format(call.id, tostring(statusCode), body or '<empty>'))
     end)
 end
 
 AddEventHandler('simple911:discord:createCall', function(call)
+    log(('Received create event for call #%s.'):format(call and call.id or '?'))
     if not discordEnabled() or type(call) ~= 'table' or not call.id then return end
 
     local tracked = snapshot(call)
@@ -269,4 +300,56 @@ AddEventHandler('simple911:discord:closeCall', function(call, closedBy)
     SetTimeout(10000, function()
         TrackedCalls[call.id] = nil
     end)
+end)
+
+RegisterCommand('911discordtest', function(source)
+    if source ~= 0 then
+        log('The 911discordtest command can only be run from the server console.')
+        return
+    end
+
+    if not discordEnabled() then
+        log('Discord test aborted: logging is disabled or no webhook is configured.')
+        return
+    end
+
+    local now = os.time()
+    local testCall = {
+        id = 9999,
+        callerName = 'Simple911 Test',
+        callerId = 0,
+        message = 'This is a Simple911 Discord webhook test.',
+        location = 'Webhook Diagnostics',
+        createdAt = now,
+        status = 'new',
+        primaryUnit = nil,
+        attachedUnits = {},
+        onSceneBy = nil
+    }
+
+    local tracked = snapshot(testCall)
+    createLiveMessage(testCall, tracked)
+end, true)
+
+AddEventHandler('onResourceStart', function(resourceName)
+    if resourceName ~= GetCurrentResourceName() then return end
+
+    log('discord.lua loaded successfully.')
+
+    if not Config.Discord then
+        log('WARNING: Config.Discord does not exist.')
+        return
+    end
+
+    if not webhookConfigured() then
+        log('WARNING: No Discord webhook is configured.')
+        return
+    end
+
+    if Config.Discord.enabled == false then
+        log('WARNING: Discord logging is explicitly disabled in config.lua.')
+        return
+    end
+
+    log('Discord logging is enabled and a webhook is configured.')
 end)
