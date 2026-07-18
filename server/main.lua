@@ -65,21 +65,6 @@ local function notifyCaller(call, message, kind)
     end
 end
 
-local function sendDiscordLog(call)
-    if not Config.Discord.enabled or Config.Discord.webhook == '' then return end
-    PerformHttpRequest(Config.Discord.webhook, function() end, 'POST', json.encode({
-        username = Config.Discord.username,
-        avatar_url = Config.Discord.avatarUrl ~= '' and Config.Discord.avatarUrl or nil,
-        embeds = {{
-            title = ('911 Call #%s'):format(call.id),
-            description = ('**Caller:** %s\n**Location:** %s\n**Message:** %s'):format(call.callerName, call.location, call.message),
-            color = 15158332,
-            footer = { text = 'Simple911 v2' },
-            timestamp = os.date('!%Y-%m-%dT%H:%M:%SZ')
-        }}
-    }), { ['Content-Type'] = 'application/json' })
-end
-
 local function forEachResponder(callback)
     for _, playerId in ipairs(GetPlayers()) do
         local responder = tonumber(playerId)
@@ -171,7 +156,6 @@ RegisterNetEvent('simple911:server:createCall', function(data)
     Cooldowns[source] = now
     notifyCaller(call, Config.Messages.submitted, 'success')
     sendCallToResponders(call)
-    sendDiscordLog(call)
 
     SetTimeout(Config.CallSettings.activeCallSeconds * 1000, function()
         local current = Calls[call.id]
@@ -311,7 +295,6 @@ exports('CreateCall', function(data)
 
     Calls[call.id] = call
     sendCallToResponders(call)
-    sendDiscordLog(call)
 
     SetTimeout(Config.CallSettings.activeCallSeconds * 1000, function()
         local current = Calls[call.id]
