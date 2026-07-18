@@ -6,7 +6,13 @@ Config.Commands = {
     emergency = '911',
     calls = '911calls',
     waypoint = '911wp',
-    clear = '911clear'
+    clear = '911clear',
+    focus = '911focus'
+}
+
+Config.Focus = {
+    defaultKey = 'F6',
+    helpText = 'Focus active 911 call notifications'
 }
 
 Config.Access = {
@@ -62,7 +68,11 @@ Config.Messages = {
     noCalls = 'There are no recent 911 calls.',
     invalidCall = 'That 911 call could not be found.',
     waypointSet = 'Waypoint set for 911 call #%s.',
-    callsCleared = 'Your local 911 call history has been cleared.'
+    callsCleared = 'Your local 911 call history has been cleared.',
+    focusEnabled = '911 call interaction enabled. Press the focus key again or Escape to return to the game.',
+    focusDisabled = '911 call interaction closed.',
+    responding = 'You are now responding to 911 call #%s.',
+    calloutClosed = '911 call #%s has been closed locally.'
 }
 
 Config.Discord = {
