@@ -1,7 +1,6 @@
 local Calls = {}
 local Blips = {}
 local Focused = false
-local RespondingTo = {}
 
 local function notify(message, kind)
     SendNUIMessage({ action = 'toast', message = message, kind = kind or 'info' })
@@ -40,7 +39,7 @@ local function addCallBlip(call)
     SetBlipColour(blip, Config.Blip.color)
     SetBlipScale(blip, Config.Blip.scale)
     SetBlipAsShortRange(blip, Config.Blip.shortRange)
-    if Config.Blip.flash then SetBlipFlashes(blip, true) end
+    if Config.Blip.flash and call.status ~= 'enroute' then SetBlipFlashes(blip, true) end
     BeginTextCommandSetBlipName('STRING')
     AddTextComponentString(('911 Call #%s'):format(call.id))
     EndTextCommandSetBlipName(blip)
@@ -56,7 +55,8 @@ local function addCallBlip(call)
     Blips[call.id] = created
 
     SetTimeout(Config.Blip.durationSeconds * 1000, function()
-        if not RespondingTo[call.id] then
+        local current = Calls[call.id]
+        if current and current.status ~= 'enroute' then
             removeCallBlips(call.id)
         end
     end)
@@ -84,6 +84,18 @@ end
 local function toggleFocus()
     setFocus(not Focused)
     notify(Focused and Config.Messages.focusEnabled or Config.Messages.focusDisabled, 'info')
+end
+
+local function sendCallToUi(action, call, duration)
+    SendNUIMessage({
+        action = action,
+        call = call,
+        duration = duration or Config.Notifications.popupDuration,
+        showCallerName = Config.CallSettings.showCallerName,
+        showCallerServerId = Config.CallSettings.showCallerServerId,
+        selfServerId = GetPlayerServerId(PlayerId()),
+        focusKey = Config.Focus.defaultKey
+    })
 end
 
 RegisterCommand(Config.Commands.focus, function()
@@ -127,7 +139,6 @@ end, false)
 
 RegisterCommand(Config.Commands.clear, function()
     Calls = {}
-    RespondingTo = {}
     for callId in pairs(Blips) do removeCallBlips(callId) end
     SendNUIMessage({ action = 'syncCalls', calls = {} })
     notify(Config.Messages.callsCleared, 'success')
@@ -146,15 +157,7 @@ RegisterNetEvent('simple911:client:receiveCall', function(call)
     end
 
     if Config.Notifications.useNuiPopup then
-        SendNUIMessage({
-            action = 'newCall',
-            call = call,
-            duration = Config.Notifications.popupDuration,
-            showCallerName = Config.CallSettings.showCallerName,
-            showCallerServerId = Config.CallSettings.showCallerServerId,
-            responding = RespondingTo[call.id] == true,
-            focusKey = Config.Focus.defaultKey
-        })
+        sendCallToUi('newCall', call, Config.Notifications.popupDuration)
     end
 
     if Config.Notifications.showChatMessage then
@@ -166,6 +169,24 @@ RegisterNetEvent('simple911:client:receiveCall', function(call)
     end
 end)
 
+RegisterNetEvent('simple911:client:updateCall', function(call)
+    Calls[call.id] = call
+
+    if call.status == 'enroute' and call.coords and not Blips[call.id] then
+        addCallBlip(call)
+    end
+
+    sendCallToUi('callUpdated', call, Config.Notifications.popupDuration)
+end)
+
+RegisterNetEvent('simple911:client:callClosed', function(callId, closedBy)
+    callId = tonumber(callId)
+    Calls[callId] = nil
+    removeCallBlips(callId)
+    SendNUIMessage({ action = 'removeCall', callId = callId })
+    notify(Config.Messages.callClosedForAll:format(callId, closedBy or 'Primary Unit'), 'success')
+end)
+
 RegisterNetEvent('simple911:client:syncCalls', function(serverCalls)
     Calls = {}
     for _, call in ipairs(serverCalls or {}) do Calls[call.id] = call end
@@ -173,7 +194,8 @@ RegisterNetEvent('simple911:client:syncCalls', function(serverCalls)
         action = 'openCalls',
         calls = serverCalls or {},
         showCallerName = Config.CallSettings.showCallerName,
-        showCallerServerId = Config.CallSettings.showCallerServerId
+        showCallerServerId = Config.CallSettings.showCallerServerId,
+        selfServerId = GetPlayerServerId(PlayerId())
     })
     setFocus(true)
 end)
@@ -196,18 +218,35 @@ end)
 
 RegisterNUICallback('respondCall', function(data, cb)
     local callId = tonumber(data.callId)
-    local call = callId and Calls[callId]
-
-    if not call then
+    if not callId or not Calls[callId] then
         notify(Config.Messages.invalidCall, 'error')
         cb({ ok = false })
         return
     end
 
-    RespondingTo[callId] = true
     setWaypoint(callId)
-    SendNUIMessage({ action = 'callStatusChanged', callId = callId, status = 'enroute' })
-    notify(Config.Messages.responding:format(callId), 'success')
+    TriggerServerEvent('simple911:server:respondToCall', callId)
+    setFocus(false)
+    cb({ ok = true })
+end)
+
+RegisterNUICallback('attachCall', function(data, cb)
+    local callId = tonumber(data.callId)
+    if not callId or not Calls[callId] then
+        notify(Config.Messages.invalidCall, 'error')
+        cb({ ok = false })
+        return
+    end
+
+    setWaypoint(callId)
+    TriggerServerEvent('simple911:server:respondToCall', callId)
+    setFocus(false)
+    cb({ ok = true })
+end)
+
+RegisterNUICallback('detachCall', function(data, cb)
+    local callId = tonumber(data.callId)
+    if callId then TriggerServerEvent('simple911:server:detachFromCall', callId) end
     setFocus(false)
     cb({ ok = true })
 end)
@@ -220,11 +259,7 @@ RegisterNUICallback('closeCallout', function(data, cb)
         return
     end
 
-    RespondingTo[callId] = nil
-    Calls[callId] = nil
-    removeCallBlips(callId)
-    SendNUIMessage({ action = 'removeCall', callId = callId })
-    notify(Config.Messages.calloutClosed:format(callId), 'success')
+    TriggerServerEvent('simple911:server:closeCall', callId)
     setFocus(false)
     cb({ ok = true })
 end)
