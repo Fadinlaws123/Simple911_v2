@@ -102,6 +102,11 @@ Config.Messages = {
     onScene = 'You have arrived on scene for 911 call #%s.'
 }
 
+Config.VersionChecker = {
+    enabled = true,
+    versionFileUrl = 'https://raw.githubusercontent.com/Fadinlaws123/Simple911_v2/main/version.json'
+}
+
 Config.Discord = {
     enabled = false,
     webhook = '',
