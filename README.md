@@ -2,7 +2,7 @@
 
 A modern, standalone-first emergency call and dispatch resource for FiveM.
 
-> **Development build:** the standalone core is ready for initial in-game testing, but this is not yet a production release.
+> **Development build:** the standalone core is ready for in-game testing, but this is not yet a production release.
 
 ## Current Features
 
@@ -11,15 +11,24 @@ A modern, standalone-first emergency call and dispatch resource for FiveM.
 - Modern NUI caller form
 - Automatic street and cross-street detection
 - Optional anonymous calls
-- Server-side call validation and cooldowns
-- Live responder dispatch panel
-- Claim, respond, unclaim, waypoint, and resolve actions
-- Server-authoritative call state
+- Server-side validation, cooldowns, and active-call limits
+- Caller cancellation with `/cancel911`
+- Caller notifications when a call is assigned, responded to, or resolved
+- Advanced live responder dispatch workspace
+- Search and filter calls by status, priority, and ownership
+- Multi-unit call assignment
+- Custom responder callsigns
+- Live on-duty unit roster and active-call counts
+- Join, respond, leave, waypoint, resolve, and reprioritize actions
+- Shared responder notes
+- Per-call event timeline and history
+- Resolved-call retention for dispatch review
+- Server-authoritative call state and responder actions
 - ACE-based responder permissions
 - On-duty/off-duty dispatch state
 - Live call blips for responders
-- Optional Discord webhook logging
-- Server export for creating calls from other resources
+- Optional Discord webhook logging for calls and status changes
+- Server exports for creating and reading calls from other resources
 
 ## Installation
 
@@ -32,37 +41,59 @@ A modern, standalone-first emergency call and dispatch resource for FiveM.
 
 - `/911` - Open the emergency call form.
 - `/311` - Open the non-emergency call form.
-- `/dispatch` - Open the responder dispatch panel.
+- `/dispatch` - Open the responder dispatch center.
 - `/911duty` - Toggle responder dispatch duty.
+- `/cancel911` - Cancel your latest active call.
 
 ## Quick Standalone Test
-
-For a local test server, grant your admin group responder access:
 
 ```cfg
 add_ace group.admin simple911.responder allow
 ```
 
-Then:
+Then test:
 
-1. Join the server and run `/911duty` as a permitted player.
-2. Submit a call with `/911` or `/311`.
-3. Open `/dispatch` and test claim, respond, waypoint, unclaim, and resolve actions.
-4. Test with two players if possible to verify live synchronization and call claiming.
+1. Go on duty with `/911duty`.
+2. Open `/dispatch` and set a callsign.
+3. Submit calls using `/911` and `/311`.
+4. Test joining, responding, leaving, reprioritizing, adding notes, setting waypoints, and resolving calls.
+5. Use `/cancel911` from the caller side.
+6. Test with two players where possible to verify multi-unit assignment, live syncing, roster updates, and shared notes.
 
 ## Configuration
 
-Most server-owner customization lives in `config.lua`, including:
+Most customization lives in `config.lua`, including services, commands, templates, priorities, cooldowns, message limits, responder permissions, multi-unit behavior, call retention, blips, and Discord logging.
 
-- Services and commands
-- Call templates
-- Categories and priorities
-- Cooldowns and message limits
-- Blip appearance
-- ACE permission name
-- Discord logging
+Additional services can be added by creating another entry in `Config.Services`. The caller UI automatically reads configured services and templates.
 
-Additional services can be added by creating another entry in `Config.Services`. The NUI reads configured services and templates automatically.
+## Exports
+
+### CreateCall
+
+Creates a dispatch call from another server resource.
+
+```lua
+local success, callId = exports.Simple911_v2:CreateCall({
+    serviceId = '911',
+    templateId = 'shots_fired',
+    message = 'Automatic panic alarm activation.',
+    callerName = 'Alarm System',
+    location = 'Mission Row',
+    coords = { x = 425.1, y = -979.5, z = 30.7 }
+})
+```
+
+### GetCall
+
+```lua
+local call = exports.Simple911_v2:GetCall(callId)
+```
+
+### GetActiveCalls
+
+```lua
+local calls = exports.Simple911_v2:GetActiveCalls()
+```
 
 ## Integrations
 
