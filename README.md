@@ -1,166 +1,106 @@
 # Simple911 v2
 
-A standalone-first emergency call and advanced dispatch system for FiveM.
+A lightweight, standalone-first emergency call system for FiveM.
 
-> **Development build:** the standalone core is ready for in-game testing, but this is not yet a production release.
+Simple911 v2 keeps the player experience simple: civilians use `/911 <message>`, and permitted responders receive a sound alert, an on-screen call notification, and a temporary map blip with quick waypoint controls.
 
-## Current Features
+## Features
 
-### Caller System
-
-- Configurable 911, 311, and completely custom call services
-- Config-driven templated emergency messages and dispatch codes
-- Modern NUI caller form
+- `/911 <message>` emergency calling
 - Automatic street and cross-street detection
-- Optional anonymous calls
-- Server-side validation, cooldowns, and active-call limits
-- Caller cancellation with `/cancel911`
-- Caller call-status checks with `/911status`
-- Two-way responder-to-caller messaging
-- Caller replies with `/911reply <message>`
-- Caller notifications when units are assigned, responding, on scene, or the call is resolved
-- Optional queued-call handling and warnings when no matching responders are available
-
-### Dispatch System
-
-- Advanced live responder dispatch workspace
-- Department-aware call routing
-- Optional dispatcher-first routing when dedicated dispatchers are online
-- Custom incident codes such as `10-71`, `10-31`, `MED-1`, and custom codes from integrations
-- Search calls by code, type, location, caller, department, and message
-- Filter calls by status, priority, and assigned ownership
-- Multi-unit call assignment
-- Join, respond, mark on scene, leave, waypoint, resolve, and reprioritize actions
-- Shared responder notes
-- Full per-call event timeline
-- Two-way caller communication history stored with each incident
-- Resolved-call retention for review
-- Priority-aware map blips with optional flashing and radius blips
-- Custom per-alert blip configuration
-- Configurable dispatch sounds
-
-### Unit Management
-
-- Custom responder callsigns
-- Configurable Police, Fire, EMS, Tow/Service, Dispatch, and additional custom departments
-- Unit statuses: Available, Busy, En Route, On Scene, and Unavailable
-- Configurable radio/channel identifiers
-- Live on-duty unit roster
-- Active-call counts per unit
-- Periodic responder location synchronization for integrations and future map tooling
-- Separate ACE permissions for responders and dedicated dispatchers
-
-### Emergency & Integration Tools
-
-- `/panic` responder distress system that generates a Priority 1 incident
-- `CreateCall` server export for predefined call templates
-- `CustomAlert` server export for fully custom automatic dispatch incidents
-- Custom recipient departments
-- Custom priority, code, title, category, metadata, coordinates, and blip settings
+- Server-side cooldown and message validation
+- ACE-based responder permissions
+- Configurable alert sound
+- Modern lightweight responder popup
+- Temporary map blips
+- Optional configurable radius blip
+- Flashing emergency blips
+- One-click waypoint button from the popup
+- `/911wp [call ID]` waypoint command
+- `/911calls` lightweight recent-call list
+- `/911clear` to clear local call history and blips
+- Configurable caller name/server ID visibility
+- Optional chat alerts
 - Optional Discord webhook logging
-- Server-authoritative incident state and responder actions
+- `CreateCall` export for other resources
+- `GetActiveCalls` export for integrations
 
 ## Installation
 
 1. Place the resource in your server's resources directory as `Simple911_v2`.
 2. Add `ensure Simple911_v2` to your `server.cfg`.
-3. Give responders the `simple911.responder` ACE permission. See `server.cfg.example`.
-4. Optionally give dedicated dispatchers `simple911.dispatcher`.
-5. Restart the resource/server.
+3. Give law enforcement or other responders the `simple911.responder` ACE permission.
+4. Restart the resource/server.
 
-## Default Commands
-
-- `/911` - Open the emergency call form.
-- `/311` - Open the non-emergency call form.
-- `/dispatch` - Open the responder dispatch center.
-- `/911duty` - Toggle responder dispatch duty.
-- `/cancel911` - Cancel your latest active call.
-- `/911reply <message>` - Send additional information to responders on your latest active call.
-- `/911status` - Check the status of your latest tracked call.
-- `/panic` - Send a responder distress alert.
-
-## Quick Standalone Test
+Example:
 
 ```cfg
+ensure Simple911_v2
 add_ace group.admin simple911.responder allow
-add_ace group.admin simple911.dispatcher allow
 ```
 
-Then test:
+## Commands
 
-1. Go on duty with `/911duty`.
-2. Open `/dispatch`, configure your callsign, department, status, and radio.
-3. Submit calls using `/911` and `/311`.
-4. Test department routing with multiple responders in different departments.
-5. Test joining, responding, marking on scene, leaving, reprioritizing, notes, waypoints, and resolving calls.
-6. Send a message to the caller from the incident details panel and reply with `/911reply`.
-7. Test `/panic` while on duty.
-8. Use two or more players where possible to verify dispatcher-first routing, multi-unit assignments, unit states, and live synchronization.
+- `/911 <message>` - Send a new emergency call.
+- `/911calls` - Open the recent 911 call list.
+- `/911wp` - Set a waypoint to the newest locally received call.
+- `/911wp <call ID>` - Set a waypoint to a specific call.
+- `/911clear` - Clear your locally stored calls and active Simple911 blips.
+
+## Example
+
+```text
+/911 There is a red Sultan shooting at people outside the gas station
+```
+
+Permitted responders receive the caller's location, message, configurable caller information, alert sound, and map blip.
 
 ## Configuration
 
-Most customization lives in `config.lua`, including:
+Everything is configured in `config.lua`, including:
 
-- Services and commands
-- Templates and incident codes
-- Recipient departments
-- Unit departments and statuses
-- Dispatcher-first routing
-- Caller chat limits
-- Cooldowns and call limits
-- Panic/distress behavior
-- Blips and sounds
+- Commands
+- ACE permission
+- Call cooldown
+- Maximum message length
+- Call history length
+- Call/blip duration
+- Caller information visibility
+- Popup notifications
+- Chat messages
+- Alert sounds
+- Blip appearance and radius
 - Discord logging
 
 ## Server Exports
 
 ### CreateCall
 
-Creates a call using a configured service and template.
+Other server resources can create a Simple911 call without requiring a player command.
 
 ```lua
 local success, callId = exports.Simple911_v2:CreateCall({
-    serviceId = '911',
-    templateId = 'shots_fired',
-    message = 'Automatic gunshot detection triggered.',
-    callerName = 'ShotSpotter',
-    location = 'Mission Row',
-    coords = { x = 425.1, y = -979.5, z = 30.7 }
-})
-```
-
-### CustomAlert
-
-Creates a fully customized dispatch alert for integrations with robbery, alarm, vehicle, panic, medical, and other resources.
-
-```lua
-local success, callId = exports.Simple911_v2:CustomAlert({
-    title = 'Bank Silent Alarm',
-    code = '10-90',
-    category = 'Robbery',
-    priority = 1,
-    departments = { 'police', 'dispatch' },
-    message = 'Silent alarm triggered at Fleeca Bank.',
+    message = 'Silent alarm triggered at the bank.',
     callerName = 'Alarm System',
     location = 'Legion Square',
-    coords = { x = 150.0, y = -1040.0, z = 29.0 },
-    blip = {
-        sprite = 161,
-        color = 1,
-        scale = 1.1,
-        flash = true,
-        radius = 75.0
-    },
-    metadata = {
-        alarmType = 'silent'
+    coords = {
+        x = 150.0,
+        y = -1040.0,
+        z = 29.0
     }
 })
 ```
 
-## Framework Integrations
+### GetActiveCalls
 
-The standalone core remains the source of truth. Optional QBCore, ESX, Qbox, and ND_Core bridges can be layered on for automatic names, jobs, departments, and duty states without replacing the standalone dispatch engine.
+```lua
+local calls = exports.Simple911_v2:GetActiveCalls()
+```
+
+## Development Direction
+
+Simple911 is intentionally focused on emergency calling and responder alerts. Full CAD/MDT features should live in a separate resource and integrate with Simple911 through its exports/events rather than turning the 911 script itself into a terminal.
 
 ## Development Status
 
-This repository is under active development. Report reproducible issues with console errors and the exact steps needed to trigger them.
+This is currently a development build. Test it in-game before using it on a production server and report reproducible issues with console errors and exact reproduction steps.
