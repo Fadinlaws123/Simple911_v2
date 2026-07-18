@@ -132,6 +132,87 @@ Simple911 includes a built-in version checker that runs when the resource starts
 
 ---
 
+## 📸 Preview
+
+### 🗂️ 911 Calls Interface
+
+View and manage active incidents through the `/911calls` panel. Responders can quickly see call details, current status, assigned units, and available actions from one place.
+
+<div align="center">
+
+<img width="100%" alt="Simple911 active calls interface" src="https://github.com/user-attachments/assets/35b2b44f-e07d-4f30-b733-acab46f9657a" />
+
+</div>
+
+#### Call Statuses
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <strong>🚓 En Route</strong><br><br>
+      <img width="100%" alt="Simple911 en route call status" src="https://github.com/user-attachments/assets/2abdcb99-6ac5-476f-89dd-cca4bb961bc1" />
+    </td>
+    <td align="center" width="50%">
+      <strong>🟢 On Scene</strong><br><br>
+      <img width="100%" alt="Simple911 on scene call status" src="https://github.com/user-attachments/assets/60176a7c-2948-4496-aa99-f80392a984fd" />
+    </td>
+  </tr>
+</table>
+
+### 🚨 Responder Call Cards
+
+Incoming 911 calls appear as lightweight responder cards that update live as units respond and arrive on scene.
+
+<div align="center">
+
+<img width="390" alt="Simple911 incoming responder call card" src="https://github.com/user-attachments/assets/bc20b8d8-e1af-46e7-a09e-0b37580d6eff" />
+
+</div>
+
+#### Card Statuses
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <strong>🚓 En Route</strong><br><br>
+      <img width="100%" alt="Simple911 en route responder card" src="https://github.com/user-attachments/assets/d69ab132-7bb8-49be-8d6e-25c56a03ad84" />
+    </td>
+    <td align="center" width="50%">
+      <strong>🟢 On Scene</strong><br><br>
+      <img width="100%" alt="Simple911 on scene responder card" src="https://github.com/user-attachments/assets/3d13b3e2-1e52-4405-aed1-6cde22b89134" />
+    </td>
+  </tr>
+</table>
+
+### 📡 Live Discord Incident Logs
+
+Each 911 call creates one detailed Discord incident log that updates throughout the entire response lifecycle instead of flooding the channel with separate messages.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <strong>🔴 New 911 Call</strong><br><br>
+      <img width="100%" alt="Simple911 new Discord incident log" src="https://github.com/user-attachments/assets/3c8bc371-b4ca-487d-a024-0375ccb470ea" />
+    </td>
+    <td align="center" width="50%">
+      <strong>🔵 Unit En Route</strong><br><br>
+      <img width="100%" alt="Simple911 unit en route Discord incident log" src="https://github.com/user-attachments/assets/c4a91f11-6f6f-4298-a220-4c21703b3782" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>🟢 Unit On Scene</strong><br><br>
+      <img width="100%" alt="Simple911 unit on scene Discord incident log" src="https://github.com/user-attachments/assets/bf7a5510-719a-4660-9e05-6e221330c117" />
+    </td>
+    <td align="center" width="50%">
+      <strong>🔒 Call Closed</strong><br><br>
+      <img width="100%" alt="Simple911 closed Discord incident log" src="https://github.com/user-attachments/assets/b24724a1-dfbb-4ccd-b125-1edb98ba2338" />
+    </td>
+  </tr>
+</table>
+
+---
+
 ## 📥 Installation
 
 ### 1. Download the Resource
