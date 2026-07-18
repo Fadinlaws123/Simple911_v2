@@ -15,7 +15,8 @@ client_scripts {
     'client/main.lua'
 }
 
--- Load Discord handlers first so they are registered before any 911 calls are created.
+-- Load the version checker first, followed by Discord handlers and the main server logic.
+server_script 'server/versioncheck.js'
 server_script 'server/discord.lua'
 server_script 'server/main.lua'
 
