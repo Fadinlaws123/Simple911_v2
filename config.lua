@@ -106,5 +106,7 @@ Config.Discord = {
     enabled = false,
     webhook = '',
     username = 'Simple911',
-    avatarUrl = ''
+    avatarUrl = '',
+    syncIntervalMs = 1000,
+    maxActivityEntries = 8
 }
