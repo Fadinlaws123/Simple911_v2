@@ -29,8 +29,6 @@ Config.CallSettings = {
     showCallerServerId = false
 }
 
--- Automatically changes an active response from EN ROUTE to ON SCENE when a
--- primary or attached unit enters the configured distance from the call.
 Config.OnScene = {
     enabled = true,
     radius = 75.0,
@@ -82,6 +80,10 @@ Config.Messages = {
     empty = 'Please include a message with your 911 call.',
     cooldown = 'Please wait %s second(s) before making another 911 call.',
     submitted = 'Your 911 call has been sent to emergency responders.',
+    callerUnitResponding = 'A responder has accepted your 911 call and is en route.',
+    callerAdditionalUnit = 'An additional responder has attached to your 911 call.',
+    callerOnScene = 'Emergency responders have arrived on scene for your 911 call.',
+    callerResolved = 'Your 911 call has been closed by emergency responders.',
     noPermission = 'You do not have permission to view 911 calls.',
     noCalls = 'There are no recent 911 calls.',
     noVisibleCalls = 'There are no active 911 cards to interact with.',
