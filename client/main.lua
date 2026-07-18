@@ -1,9 +1,36 @@
 local Calls = {}
 local Blips = {}
+local VisibleCards = {}
 local Focused = false
+
+-- FiveM control IDs used for direct configurable key handling.
+-- This avoids persisted RegisterKeyMapping binds overriding config changes.
+local FocusControls = {
+    A = 34, B = 29, C = 26, D = 35, E = 38, F = 23, G = 47, H = 74,
+    K = 311, L = 182, M = 244, N = 249, Q = 44, R = 45, S = 33,
+    T = 245, U = 303, V = 0, W = 32, X = 73, Y = 246, Z = 20,
+    F1 = 288, F2 = 289, F3 = 170, F5 = 166, F6 = 167, F7 = 168,
+    F8 = 169, F9 = 56, F10 = 57,
+    LEFTSHIFT = 21, LEFTCTRL = 36, SPACE = 22
+}
 
 local function notify(message, kind)
     SendNUIMessage({ action = 'toast', message = message, kind = kind or 'info' })
+end
+
+local function getConfiguredFocusKey()
+    return string.upper(tostring(Config.Focus.key or 'N'))
+end
+
+local function getFocusControl()
+    return FocusControls[getConfiguredFocusKey()]
+end
+
+local function hasVisibleCards()
+    for callId, visible in pairs(VisibleCards) do
+        if visible and Calls[callId] then return true end
+    end
+    return false
 end
 
 local function getLocationData()
@@ -76,14 +103,30 @@ local function setWaypoint(callId)
 end
 
 local function setFocus(state)
+    if state and not hasVisibleCards() then
+        Focused = false
+        SetNuiFocus(false, false)
+        SendNUIMessage({ action = 'setFocusState', focused = false })
+        notify(Config.Messages.noVisibleCalls, 'error')
+        return false
+    end
+
     Focused = state == true
     SetNuiFocus(Focused, Focused)
     SendNUIMessage({ action = 'setFocusState', focused = Focused })
+    return true
 end
 
 local function toggleFocus()
-    setFocus(not Focused)
-    notify(Focused and Config.Messages.focusEnabled or Config.Messages.focusDisabled, 'info')
+    if Focused then
+        setFocus(false)
+        notify(Config.Messages.focusDisabled, 'info')
+        return
+    end
+
+    if setFocus(true) then
+        notify(Config.Messages.focusEnabled, 'info')
+    end
 end
 
 local function sendCallToUi(action, call, duration)
@@ -94,15 +137,13 @@ local function sendCallToUi(action, call, duration)
         showCallerName = Config.CallSettings.showCallerName,
         showCallerServerId = Config.CallSettings.showCallerServerId,
         selfServerId = GetPlayerServerId(PlayerId()),
-        focusKey = Config.Focus.defaultKey
+        focusKey = getConfiguredFocusKey()
     })
 end
 
 RegisterCommand(Config.Commands.focus, function()
     toggleFocus()
 end, false)
-
-RegisterKeyMapping(Config.Commands.focus, Config.Focus.helpText, 'keyboard', Config.Focus.defaultKey)
 
 RegisterCommand(Config.Commands.emergency, function(_, args)
     local message = table.concat(args, ' ')
@@ -139,8 +180,11 @@ end, false)
 
 RegisterCommand(Config.Commands.clear, function()
     Calls = {}
+    VisibleCards = {}
     for callId in pairs(Blips) do removeCallBlips(callId) end
+    setFocus(false)
     SendNUIMessage({ action = 'syncCalls', calls = {} })
+    SendNUIMessage({ action = 'clearCards' })
     notify(Config.Messages.callsCleared, 'success')
 end, false)
 
@@ -150,6 +194,7 @@ end)
 
 RegisterNetEvent('simple911:client:receiveCall', function(call)
     Calls[call.id] = call
+    VisibleCards[call.id] = true
     addCallBlip(call)
 
     if Config.Sound.enabled then
@@ -162,15 +207,33 @@ RegisterNetEvent('simple911:client:receiveCall', function(call)
 
     if Config.Notifications.showChatMessage then
         TriggerEvent('chat:addMessage', {
-            color = { 255, 70, 70 },
+            color = { 255, 82, 82 },
             multiline = true,
-            args = { ('911 #%s'):format(call.id), ('%s | %s'):format(call.location, call.message) }
+            args = {
+                ('911 CALL #%s'):format(call.id),
+                ('%s\n%s\nPress [%s] to interact with the call card or use /%s %s to set a waypoint.'):format(
+                    call.location,
+                    call.message,
+                    getConfiguredFocusKey(),
+                    Config.Commands.waypoint,
+                    call.id
+                )
+            }
         })
     end
+
+    SetTimeout(Config.Notifications.popupDuration, function()
+        local current = Calls[call.id]
+        if current and current.status ~= 'enroute' then
+            VisibleCards[call.id] = nil
+            if Focused and not hasVisibleCards() then setFocus(false) end
+        end
+    end)
 end)
 
 RegisterNetEvent('simple911:client:updateCall', function(call)
     Calls[call.id] = call
+    VisibleCards[call.id] = true
 
     if call.status == 'enroute' and call.coords and not Blips[call.id] then
         addCallBlip(call)
@@ -182,8 +245,11 @@ end)
 RegisterNetEvent('simple911:client:callClosed', function(callId, closedBy)
     callId = tonumber(callId)
     Calls[callId] = nil
+    VisibleCards[callId] = nil
     removeCallBlips(callId)
     SendNUIMessage({ action = 'removeCall', callId = callId })
+
+    if Focused and not hasVisibleCards() then setFocus(false) end
     notify(Config.Messages.callClosedForAll:format(callId, closedBy or 'Primary Unit'), 'success')
 end)
 
@@ -197,17 +263,26 @@ RegisterNetEvent('simple911:client:syncCalls', function(serverCalls)
         showCallerServerId = Config.CallSettings.showCallerServerId,
         selfServerId = GetPlayerServerId(PlayerId())
     })
-    setFocus(true)
+    SetNuiFocus(true, true)
 end)
 
 RegisterNUICallback('close', function(_, cb)
-    setFocus(false)
+    SetNuiFocus(false, false)
+    Focused = false
+    SendNUIMessage({ action = 'setFocusState', focused = false })
     SendNUIMessage({ action = 'closeCalls' })
     cb({ ok = true })
 end)
 
 RegisterNUICallback('releaseFocus', function(_, cb)
     setFocus(false)
+    cb({ ok = true })
+end)
+
+RegisterNUICallback('cardHidden', function(data, cb)
+    local callId = tonumber(data.callId)
+    if callId then VisibleCards[callId] = nil end
+    if Focused and not hasVisibleCards() then setFocus(false) end
     cb({ ok = true })
 end)
 
@@ -265,10 +340,22 @@ RegisterNUICallback('closeCallout', function(data, cb)
 end)
 
 CreateThread(function()
+    local warnedInvalidKey = false
+
     while true do
-        Wait(0)
-        if Focused and IsControlJustReleased(0, 322) then
-            setFocus(false)
+        local waitTime = 500
+        local control = getFocusControl()
+
+        if control and hasVisibleCards() and not Focused then
+            waitTime = 0
+            if IsControlJustReleased(0, control) then
+                toggleFocus()
+            end
+        elseif not control and not warnedInvalidKey then
+            warnedInvalidKey = true
+            print(('[Simple911] Unsupported Config.Focus.key "%s". Use /%s or choose a supported key.'):format(getConfiguredFocusKey(), Config.Commands.focus))
         end
+
+        Wait(waitTime)
     end
 end)
