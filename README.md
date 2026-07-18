@@ -4,6 +4,25 @@
 
 ### A modern, standalone-first 911 call system built to keep emergency calls simple for civilians and useful for responders.
 
+<p>
+  <a href="https://simpledevelopments.org/store">
+    <img src="https://img.shields.io/badge/Explore_Our_Store-5865F2?style=for-the-badge&logo=googlechrome&logoColor=white" />
+  </a>
+  <a href="https://discord.gg/RquDVTfDwu">
+    <img src="https://img.shields.io/badge/Join_Our_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" />
+  </a>
+  <a href="https://github.com/Fadinlaws123/Simple911_v2">
+    <img src="https://img.shields.io/badge/View_on_GitHub-181717?style=for-the-badge&logo=github&logoColor=white" />
+  </a>
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/FiveM-Standalone-FF6B35?style=flat-square&logo=fivem&logoColor=white" />
+  <img src="https://img.shields.io/badge/Framework-No_Dependency-238636?style=flat-square" />
+  <img src="https://img.shields.io/badge/Status-Active_Development-8B5CF6?style=flat-square" />
+  <img src="https://img.shields.io/github/stars/Fadinlaws123/Simple911_v2?style=flat-square&logo=github&label=Stars" />
+</p>
+
 </div>
 
 ---
