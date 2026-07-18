@@ -8,91 +8,19 @@
 </head>
 <body>
     <div id="toastStack" class="toast-stack"></div>
+    <div id="alertStack" class="alert-stack"></div>
 
-    <main id="app" class="hidden">
-        <section id="callerView" class="panel caller-panel hidden">
-            <header class="panel-header">
-                <div>
-                    <span class="eyebrow" id="serviceShortLabel">911</span>
-                    <h1 id="serviceLabel">Emergency Services</h1>
-                    <p id="serviceDescription"></p>
-                </div>
-                <button class="icon-button" data-close aria-label="Close">×</button>
-            </header>
-
-            <div class="location-strip"><span>Current location</span><strong id="callerLocation">Unknown Location</strong></div>
-
-            <div class="field">
-                <label for="templateSelect">What are you reporting?</label>
-                <select id="templateSelect"></select>
+    <section id="callsPanel" class="calls-panel hidden">
+        <header>
+            <div>
+                <span class="eyebrow">Simple911</span>
+                <h1>Recent 911 Calls</h1>
+                <p>Quick access to recent emergency calls. Nothing pretending to be an MDT anymore.</p>
             </div>
-
-            <div class="field">
-                <div class="field-row"><label for="messageInput">Call details</label><span id="characterCount">0 / 500</span></div>
-                <textarea id="messageInput" rows="7" placeholder="Provide any important details dispatch should know..."></textarea>
-            </div>
-
-            <label id="anonymousRow" class="check-row"><input id="anonymousInput" type="checkbox"><span>Submit this call anonymously</span></label>
-
-            <footer class="panel-footer">
-                <button class="button secondary" data-close>Cancel</button>
-                <button id="submitCall" class="button danger">Submit Call</button>
-            </footer>
-        </section>
-
-        <section id="dispatchView" class="panel dispatch-panel hidden">
-            <header class="panel-header dispatch-header">
-                <div>
-                    <span class="eyebrow">Simple911 Advanced Dispatch</span>
-                    <h1>Dispatch Center</h1>
-                    <p>Live incidents, responding units, notes, priorities, and call history.</p>
-                </div>
-                <div class="header-actions">
-                    <input id="callsignInput" class="compact-input" maxlength="24" placeholder="Callsign">
-                    <button id="saveCallsign" class="button secondary">Save Callsign</button>
-                    <button id="dutyButton" class="button secondary">Go On Duty</button>
-                    <button class="icon-button" data-close aria-label="Close">×</button>
-                </div>
-            </header>
-
-            <div class="dispatch-toolbar">
-                <div class="stat"><span>Active</span><strong id="activeCount">0</strong></div>
-                <div class="stat"><span>Priority 1</span><strong id="priorityCount">0</strong></div>
-                <div class="stat"><span>Responding</span><strong id="respondingCount">0</strong></div>
-                <div class="stat"><span>Units</span><strong id="unitCount">0</strong></div>
-                <input id="searchInput" class="search-input" placeholder="Search calls, locations, callers...">
-                <select id="priorityFilter" class="toolbar-select">
-                    <option value="all">All Priorities</option>
-                    <option value="1">Priority 1</option>
-                    <option value="2">Priority 2</option>
-                    <option value="3">Priority 3</option>
-                </select>
-                <div class="filters">
-                    <button class="filter active" data-filter="active">Active</button>
-                    <button class="filter" data-filter="mine">My Calls</button>
-                    <button class="filter" data-filter="resolved">Resolved</button>
-                    <button class="filter" data-filter="all">All</button>
-                </div>
-            </div>
-
-            <div class="dispatch-layout">
-                <aside class="unit-sidebar">
-                    <div class="section-heading"><span>On-Duty Units</span><span id="unitBadge" class="badge">0</span></div>
-                    <div id="unitList" class="unit-list"></div>
-                </aside>
-
-                <div id="callList" class="call-list"></div>
-
-                <aside id="detailPanel" class="detail-panel">
-                    <div class="empty-detail">
-                        <span class="eyebrow">Call Details</span>
-                        <h3>Select an incident</h3>
-                        <p>Open a call to review units, notes, history, and advanced controls.</p>
-                    </div>
-                </aside>
-            </div>
-        </section>
-    </main>
+            <button id="closeCalls" class="icon-button">×</button>
+        </header>
+        <div id="callsList" class="calls-list"></div>
+    </section>
 
     <script src="app.js"></script>
 </body>
