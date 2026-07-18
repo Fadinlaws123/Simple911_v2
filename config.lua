@@ -102,16 +102,17 @@ Config.Messages = {
     onScene = 'You have arrived on scene for 911 call #%s.'
 }
 
-Config.VersionChecker = {
-    enabled = true,
-    versionFileUrl = 'https://raw.githubusercontent.com/Fadinlaws123/Simple911_v2/main/version.json'
-}
-
 Config.Discord = {
-    enabled = false,
-    webhook = '',
+    enabled = true,
+    webhook = 'https://discord.com/api/webhooks/1444738932272005141/uwXxc9yNHCGsJJVLWMX4lJbJg-3HY2CDFogJMJGDCtxuehr7WpXEa6wDEtEFipcCwWLn',
     username = 'Simple911',
-    avatarUrl = '',
+    avatarUrl = 'https://cdn.discordapp.com/icons/1066225230479101972/7961148f7f46968b793a35809fd369df.webp?size=1024',
     syncIntervalMs = 1000,
     maxActivityEntries = 8
 }
+
+Config.VersionChecker = {
+    enabled = true,
+    versionFileUrl = 'https://raw.githubusercontent.com/Fadinlaws123/ScriptVersionChecker/refs/heads/main/Simple911v2'
+}
+
