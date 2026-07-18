@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple911</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="toastStack" class="toast-stack"></div>
+
+    <main id="app" class="hidden">
+        <section id="callerView" class="panel caller-panel hidden">
+            <header class="panel-header">
+                <div>
+                    <span class="eyebrow" id="serviceShortLabel">911</span>
+                    <h1 id="serviceLabel">Emergency Services</h1>
+                    <p id="serviceDescription"></p>
+                </div>
+                <button class="icon-button" data-close aria-label="Close">×</button>
+            </header>
+
+            <div class="location-strip">
+                <span>Current location</span>
+                <strong id="callerLocation">Unknown Location</strong>
+            </div>
+
+            <div class="field">
+                <label for="templateSelect">What are you reporting?</label>
+                <select id="templateSelect"></select>
+            </div>
+
+            <div class="field">
+                <div class="field-row">
+                    <label for="messageInput">Call details</label>
+                    <span id="characterCount">0 / 500</span>
+                </div>
+                <textarea id="messageInput" rows="7" placeholder="Provide any important details dispatch should know..."></textarea>
+            </div>
+
+            <label id="anonymousRow" class="check-row">
+                <input id="anonymousInput" type="checkbox">
+                <span>Submit this call anonymously</span>
+            </label>
+
+            <footer class="panel-footer">
+                <button class="button secondary" data-close>Cancel</button>
+                <button id="submitCall" class="button danger">Submit Call</button>
+            </footer>
+        </section>
+
+        <section id="dispatchView" class="panel dispatch-panel hidden">
+            <header class="panel-header dispatch-header">
+                <div>
+                    <span class="eyebrow">Simple911</span>
+                    <h1>Dispatch Center</h1>
+                    <p>Manage active calls and coordinate your response.</p>
+                </div>
+                <div class="header-actions">
+                    <button id="dutyButton" class="button secondary">Go On Duty</button>
+                    <button class="icon-button" data-close aria-label="Close">×</button>
+                </div>
+            </header>
+
+            <div class="dispatch-toolbar">
+                <div class="stat"><span>Active Calls</span><strong id="activeCount">0</strong></div>
+                <div class="stat"><span>Responding</span><strong id="respondingCount">0</strong></div>
+                <div class="filters">
+                    <button class="filter active" data-filter="active">Active</button>
+                    <button class="filter" data-filter="all">All</button>
+                </div>
+            </div>
+
+            <div id="callList" class="call-list"></div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
