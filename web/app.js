@@ -4,6 +4,7 @@ const callsPanel = document.getElementById('callsPanel');
 const callsList = document.getElementById('callsList');
 const callStates = new Map();
 let focused = false;
+let currentFocusKey = 'N';
 
 const resource = () => typeof GetParentResourceName === 'function' ? GetParentResourceName() : 'Simple911_v2';
 const post = (name, data = {}) => fetch(`https://${resource()}/${name}`, {
@@ -56,6 +57,7 @@ function renderAlertCard(callId) {
     const role = getRole(call, data.selfServerId);
     const primaryName = call.primaryUnit?.name || 'Unassigned';
     const attachedCount = (call.attachedUnits || []).length;
+    currentFocusKey = String(data.focusKey || currentFocusKey || 'N').toUpperCase();
 
     let actionButton = '';
     if (!isEnroute) {
@@ -116,7 +118,7 @@ function renderAlertCard(callId) {
 
             <div class="alert-actions">
                 ${actionButton}
-                <span>${focused ? 'Interaction enabled' : `Press ${escapeHtml(data.focusKey || 'F6')} to interact`}</span>
+                <span>${focused ? 'Interaction enabled' : `Press ${escapeHtml(currentFocusKey)} to interact`}</span>
             </div>
         </div>`;
 
@@ -165,6 +167,7 @@ function upsertCallCard(data, persistent = false) {
             if (current && current.call.status !== 'enroute' && current.element?.isConnected) {
                 current.element.remove();
                 callStates.delete(Number(call.id));
+                post('cardHidden', { callId: call.id });
             }
         }, duration);
     }
@@ -180,6 +183,14 @@ function removeCall(callId) {
     if (state?.timer) clearTimeout(state.timer);
     if (state?.element) state.element.remove();
     callStates.delete(Number(callId));
+}
+
+function clearCards() {
+    callStates.forEach(state => {
+        if (state.timer) clearTimeout(state.timer);
+        if (state.element) state.element.remove();
+    });
+    callStates.clear();
 }
 
 function openCalls(data) {
@@ -221,6 +232,11 @@ window.addEventListener('keydown', event => {
     if (event.key === 'Escape') {
         if (!callsPanel.classList.contains('hidden')) post('close');
         else if (focused) post('releaseFocus');
+        return;
+    }
+
+    if (focused && event.key.toUpperCase() === currentFocusKey) {
+        post('releaseFocus');
     }
 });
 
@@ -234,4 +250,5 @@ window.addEventListener('message', event => {
     if (data.action === 'syncCalls' && Array.isArray(data.calls) && !callsPanel.classList.contains('hidden')) openCalls(data);
     if (data.action === 'setFocusState') setFocusState(data.focused);
     if (data.action === 'removeCall') removeCall(data.callId);
+    if (data.action === 'clearCards') clearCards();
 });
