@@ -142,8 +142,16 @@ local function sendResponderChatCall(call)
     })
 end
 
-RegisterCommand(Config.Commands.focus, function() toggleFocus() end, false)
+local function finishNuiAction(data)
+    if data and data.keepPanelOpen then
+        SetNuiFocus(true, true)
+        Focused = false
+        return
+    end
+    setFocus(false)
+end
 
+RegisterCommand(Config.Commands.focus, function() toggleFocus() end, false)
 RegisterCommand('+simple911_interact_card', function() toggleFocus() end, false)
 RegisterCommand('-simple911_interact_card', function() end, false)
 RegisterKeyMapping('+simple911_interact_card', Config.Focus.helpText, 'keyboard', Config.Focus.defaultKey)
@@ -262,6 +270,7 @@ end)
 
 RegisterNUICallback('waypoint', function(data, cb)
     setWaypoint(data.callId)
+    if data and data.keepPanelOpen then SetNuiFocus(true, true) end
     cb({ ok = true })
 end)
 
@@ -274,7 +283,7 @@ RegisterNUICallback('respondCall', function(data, cb)
     end
     setWaypoint(callId)
     TriggerServerEvent('simple911:server:respondToCall', callId)
-    setFocus(false)
+    finishNuiAction(data)
     cb({ ok = true })
 end)
 
@@ -287,14 +296,14 @@ RegisterNUICallback('attachCall', function(data, cb)
     end
     setWaypoint(callId)
     TriggerServerEvent('simple911:server:respondToCall', callId)
-    setFocus(false)
+    finishNuiAction(data)
     cb({ ok = true })
 end)
 
 RegisterNUICallback('detachCall', function(data, cb)
     local callId = tonumber(data.callId)
     if callId then TriggerServerEvent('simple911:server:detachFromCall', callId) end
-    setFocus(false)
+    finishNuiAction(data)
     cb({ ok = true })
 end)
 
@@ -306,7 +315,7 @@ RegisterNUICallback('closeCallout', function(data, cb)
         return
     end
     TriggerServerEvent('simple911:server:closeCall', callId)
-    setFocus(false)
+    finishNuiAction(data)
     cb({ ok = true })
 end)
 
