@@ -45,11 +45,14 @@
                 <div>
                     <span class="eyebrow">Simple911 Advanced Dispatch</span>
                     <h1>Dispatch Center</h1>
-                    <p>Live incidents, responding units, notes, priorities, and call history.</p>
+                    <p>Live incidents, departments, units, caller communications, and incident history.</p>
                 </div>
-                <div class="header-actions">
+                <div class="header-actions profile-actions">
                     <input id="callsignInput" class="compact-input" maxlength="24" placeholder="Callsign">
-                    <button id="saveCallsign" class="button secondary">Save Callsign</button>
+                    <select id="departmentSelect" class="compact-select"></select>
+                    <select id="unitStatusSelect" class="compact-select"></select>
+                    <input id="radioInput" class="compact-input" maxlength="24" placeholder="Radio">
+                    <button id="saveUnitProfile" class="button secondary">Save Unit</button>
                     <button id="dutyButton" class="button secondary">Go On Duty</button>
                     <button class="icon-button" data-close aria-label="Close">×</button>
                 </div>
@@ -60,7 +63,7 @@
                 <div class="stat"><span>Priority 1</span><strong id="priorityCount">0</strong></div>
                 <div class="stat"><span>Responding</span><strong id="respondingCount">0</strong></div>
                 <div class="stat"><span>Units</span><strong id="unitCount">0</strong></div>
-                <input id="searchInput" class="search-input" placeholder="Search calls, locations, callers...">
+                <input id="searchInput" class="search-input" placeholder="Search code, call, location, caller...">
                 <select id="priorityFilter" class="toolbar-select">
                     <option value="all">All Priorities</option>
                     <option value="1">Priority 1</option>
@@ -87,7 +90,7 @@
                     <div class="empty-detail">
                         <span class="eyebrow">Call Details</span>
                         <h3>Select an incident</h3>
-                        <p>Open a call to review units, notes, history, and advanced controls.</p>
+                        <p>Open a call to review units, caller messages, notes, history, and advanced controls.</p>
                     </div>
                 </aside>
             </div>
