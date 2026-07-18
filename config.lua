@@ -7,14 +7,10 @@ Config.Commands = {
     calls = '911calls',
     waypoint = '911wp',
     clear = '911clear',
-    -- Manual fallback command. The actual key mapping uses an internal,
-    -- brand-new command name so legacy persisted binds cannot trigger it.
     focus = 'simple911focus'
 }
 
 Config.Focus = {
-    -- Default key for new installs. Players can rebind "Focus active 911 call notifications"
-    -- in FiveM Settings > Key Bindings > FiveM.
     defaultKey = 'N',
     helpText = 'Focus active 911 call notifications'
 }
@@ -33,19 +29,21 @@ Config.CallSettings = {
     showCallerServerId = false
 }
 
+-- Automatically changes an active response from EN ROUTE to ON SCENE when a
+-- primary or attached unit enters the configured distance from the call.
+Config.OnScene = {
+    enabled = true,
+    radius = 75.0,
+    checkIntervalMs = 1000,
+    notifyUnit = true
+}
+
 Config.Notifications = {
     useNuiPopup = true,
     popupDuration = 12000,
     showChatMessage = true,
     notifyCaller = true,
 
-    -- Standard FiveM chat:addMessage HTML template.
-    -- Placeholders:
-    -- {0} = Call ID
-    -- {1} = Location
-    -- {2} = Message
-    -- {3} = Default focus key label
-    -- {4} = Waypoint command
     chatTemplate = [[
         <div style="padding: 8px 10px; margin: 3px 0; background: rgba(15, 23, 42, 0.92); border-left: 3px solid #ef4444; border-radius: 5px;">
             <div style="font-weight: 800; color: #f87171; margin-bottom: 3px;">911 CALL #{0}</div>
@@ -98,7 +96,8 @@ Config.Messages = {
     alreadyPrimary = 'You are already the primary unit for this call.',
     alreadyAttached = 'You are already attached to this call.',
     primaryOnlyClose = 'Only the primary unit can close this callout.',
-    callClosedForAll = '911 call #%s was closed by %s.'
+    callClosedForAll = '911 call #%s was closed by %s.',
+    onScene = 'You have arrived on scene for 911 call #%s.'
 }
 
 Config.Discord = {
