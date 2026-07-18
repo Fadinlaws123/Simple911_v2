@@ -11,65 +11,127 @@ local function webhookUrl(base, wait)
     return base
 end
 
-local function statusMeta(status)
-    if status == 'onscene' then
-        return 'ON SCENE', 5763719
+local function statusMeta(status, closedBy)
+    if closedBy then
+        return 'CLOSED', 9807270, '🔒'
+    elseif status == 'onscene' then
+        return 'ON SCENE', 5763719, '🟢'
     elseif status == 'enroute' then
-        return 'EN ROUTE', 3447003
+        return 'EN ROUTE', 3447003, '🔵'
     end
-    return 'AWAITING UNIT', 15158332
+    return 'AWAITING UNIT', 15158332, '🔴'
+end
+
+local function formatTimestamp(timestamp)
+    if not timestamp then return 'Unknown' end
+    return ('<t:%s:F>\n<t:%s:R>'):format(timestamp, timestamp)
 end
 
 local function attachedNames(call)
+    local units = call.attachedUnits or {}
+    if #units == 0 then return 'None' end
+
     local names = {}
-    for _, unit in ipairs(call.attachedUnits or {}) do
-        names[#names + 1] = unit.name or ('ID %s'):format(unit.source or '?')
+    for _, unit in ipairs(units) do
+        names[#names + 1] = ('• %s'):format(unit.name or ('ID %s'):format(unit.source or '?'))
     end
-    return #names > 0 and table.concat(names, '\n') or 'None'
+    return table.concat(names, '\n')
 end
 
 local function activityText(activity)
-    if not activity or #activity == 0 then return '• Call created' end
+    if not activity or #activity == 0 then return '> No activity recorded yet.' end
 
-    local first = math.max(1, #activity - ((Config.Discord.maxActivityEntries or 8) - 1))
+    local maximum = Config.Discord.maxActivityEntries or 8
+    local first = math.max(1, #activity - maximum + 1)
     local lines = {}
     for index = first, #activity do
         lines[#lines + 1] = activity[index]
     end
+
+    if first > 1 then
+        table.insert(lines, 1, ('*%s earlier event(s) hidden*'):format(first - 1))
+    end
+
+    return table.concat(lines, '\n')
+end
+
+local function responseSummary(call, closedBy)
+    local primary = call.primaryUnit and call.primaryUnit.name or 'Unassigned'
+    local attachedCount = #(call.attachedUnits or {})
+    local lines = {
+        ('**Primary Unit:** %s'):format(primary),
+        ('**Additional Units:** %s'):format(attachedCount)
+    }
+
+    if call.onSceneBy then
+        lines[#lines + 1] = ('**On Scene Confirmed By:** %s'):format(call.onSceneBy.name or 'Unknown Unit')
+    end
+
+    if closedBy then
+        lines[#lines + 1] = ('**Closed By:** %s'):format(closedBy)
+    end
+
     return table.concat(lines, '\n')
 end
 
 local function mainEmbed(call, activity, closedBy)
-    local statusLabel, color = statusMeta(call.status)
-    if closedBy then
-        statusLabel = 'CLOSED'
-        color = 9807270
-    end
+    local statusLabel, color, statusIcon = statusMeta(call.status, closedBy)
+    local caller = call.callerName or 'Unknown Caller'
+    local callerId = call.callerId and tostring(call.callerId) or 'N/A'
+    local location = call.location or 'Unknown Location'
+    local details = call.message or 'No details provided.'
+
+    local description = table.concat({
+        ('### %s %s'):format(statusIcon, statusLabel),
+        closedBy and 'This 911 incident has been closed.' or 'This message is the live record for this 911 incident and updates automatically as responders handle the call.',
+        '',
+        ('> **%s**'):format(details)
+    }, '\n')
 
     local fields = {
-        { name = 'Status', value = ('**%s**'):format(statusLabel), inline = true },
-        { name = 'Location', value = call.location or 'Unknown Location', inline = true },
-        { name = 'Caller', value = call.callerName or 'Unknown Caller', inline = true },
-        { name = 'Call Details', value = call.message or 'No details provided.', inline = false },
-        { name = 'Primary Unit', value = call.primaryUnit and call.primaryUnit.name or 'Unassigned', inline = true },
-        { name = 'Attached Units', value = attachedNames(call), inline = true },
-        { name = 'Activity', value = activityText(activity), inline = false }
+        {
+            name = '📍 Incident Location',
+            value = ('**%s**'):format(location),
+            inline = false
+        },
+        {
+            name = '👤 Caller Information',
+            value = ('**Name:** %s\n**Server ID:** %s'):format(caller, callerId),
+            inline = true
+        },
+        {
+            name = '🕒 Call Received',
+            value = formatTimestamp(call.createdAt),
+            inline = true
+        },
+        {
+            name = '🚓 Response Overview',
+            value = responseSummary(call, closedBy),
+            inline = false
+        },
+        {
+            name = '👥 Attached Units',
+            value = attachedNames(call),
+            inline = false
+        },
+        {
+            name = '📋 Incident Activity',
+            value = activityText(activity),
+            inline = false
+        }
     }
 
-    if call.status == 'onscene' and call.onSceneBy then
-        fields[#fields + 1] = { name = 'On Scene Confirmed By', value = call.onSceneBy.name or 'Unknown Unit', inline = true }
-    end
-
-    if closedBy then
-        fields[#fields + 1] = { name = 'Closed By', value = closedBy, inline = true }
-    end
-
     return {
-        title = ('🚨 911 Call #%s'):format(call.id),
-        description = closedBy and 'This emergency call has been closed.' or 'Live emergency call record. This embed updates as responders handle the call.',
+        author = {
+            name = 'Simple911 • Emergency Communications'
+        },
+        title = ('911 Incident #%s'):format(call.id),
+        description = description,
         color = color,
         fields = fields,
-        footer = { text = 'Simple911 • Live Call Record' },
+        footer = {
+            text = closedBy and 'Simple911 • Incident Closed' or 'Simple911 • Live Incident Record • Updates Automatically'
+        },
         timestamp = os.date('!%Y-%m-%dT%H:%M:%SZ')
     }
 end
@@ -113,8 +175,13 @@ local function unitMap(units)
     return map
 end
 
-local function addActivity(tracked, text)
-    tracked.activity[#tracked.activity + 1] = ('• %s'):format(text)
+local function activityTime()
+    return os.time()
+end
+
+local function addActivity(tracked, icon, text)
+    local timestamp = activityTime()
+    tracked.activity[#tracked.activity + 1] = ('%s <t:%s:T> • %s'):format(icon or '•', timestamp, text)
 end
 
 local function snapshot(call)
@@ -125,7 +192,7 @@ local function snapshot(call)
         primaryName = call.primaryUnit and call.primaryUnit.name or nil,
         attached = unitMap(call.attachedUnits),
         messageId = nil,
-        activity = { '• Call created' }
+        activity = { ('📞 <t:%s:T> • 911 call received'):format(call.createdAt or os.time()) }
     }
 end
 
@@ -135,25 +202,31 @@ local function processChanges(tracked, call)
     local currentAttached = unitMap(call.attachedUnits)
 
     if tracked.primarySource ~= currentPrimarySource and currentPrimarySource then
-        addActivity(tracked, ('%s became the Primary Unit'):format(currentPrimaryName or 'Unknown Unit'))
+        addActivity(tracked, '🚓', ('%s became the Primary Unit'):format(currentPrimaryName or 'Unknown Unit'))
     elseif tracked.primarySource and not currentPrimarySource then
-        addActivity(tracked, 'Primary Unit cleared')
+        addActivity(tracked, '⚪', 'Primary Unit assignment was cleared')
+    elseif tracked.primarySource and currentPrimarySource and tracked.primarySource ~= currentPrimarySource then
+        addActivity(tracked, '🔄', ('Primary Unit transferred to %s'):format(currentPrimaryName or 'Unknown Unit'))
     end
 
     for source, name in pairs(currentAttached) do
         if not tracked.attached[source] then
-            addActivity(tracked, ('%s attached to the call'):format(name))
+            addActivity(tracked, '➕', ('%s attached to the incident'):format(name))
         end
     end
 
     for source, name in pairs(tracked.attached) do
         if not currentAttached[source] then
-            addActivity(tracked, ('%s detached from the call'):format(name))
+            addActivity(tracked, '➖', ('%s detached from the incident'):format(name))
         end
     end
 
-    if tracked.status ~= call.status and call.status == 'onscene' then
-        addActivity(tracked, ('%s arrived On Scene'):format(call.onSceneBy and call.onSceneBy.name or currentPrimaryName or 'A responder'))
+    if tracked.status ~= call.status then
+        if call.status == 'enroute' then
+            addActivity(tracked, '🔵', 'Response status changed to En Route')
+        elseif call.status == 'onscene' then
+            addActivity(tracked, '🟢', ('%s confirmed units On Scene'):format(call.onSceneBy and call.onSceneBy.name or currentPrimaryName or 'A responder'))
+        end
     end
 
     tracked.data = call
@@ -190,7 +263,7 @@ CreateThread(function()
             for callId, tracked in pairs(TrackedCalls) do
                 if not seen[callId] then
                     local closedBy = tracked.primaryName or 'System / Expired'
-                    addActivity(tracked, ('Call closed by %s'):format(closedBy))
+                    addActivity(tracked, '🔒', ('Incident closed by %s'):format(closedBy))
                     editLiveMessage(tracked, tracked.data, closedBy)
                     TrackedCalls[callId] = nil
                 end
