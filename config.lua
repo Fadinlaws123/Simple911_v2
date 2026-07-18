@@ -6,36 +6,28 @@ Config.Locale = 'en'
 Config.Commands = {
     dispatch = 'dispatch',
     toggleDuty = '911duty',
-    cancelLastCall = 'cancel911',
-    replyToCall = '911reply',
-    callStatus = '911status',
-    panic = 'panic'
+    cancelLastCall = 'cancel911'
 }
 
 Config.ResponderAccess = {
     acePermission = 'simple911.responder',
-    dispatcherAcePermission = 'simple911.dispatcher',
     allowEveryoneWhenDebug = true
 }
 
 Config.Cooldown = {
     enabled = true,
-    seconds = 20,
-    panicSeconds = 30
+    seconds = 20
 }
 
 Config.CallSettings = {
     maxMessageLength = 500,
     maxNoteLength = 280,
-    maxChatMessageLength = 280,
     maxActiveCalls = 100,
     resolvedRetentionSeconds = 900,
     anonymousLabel = 'Anonymous Caller',
     allowCallerCancel = true,
     allowPriorityChanges = true,
-    defaultCallsignPrefix = 'UNIT',
-    queueCallsWhenNoUnits = true,
-    tellCallerWhenNoUnits = true
+    defaultCallsignPrefix = 'UNIT'
 }
 
 Config.Dispatch = {
@@ -43,26 +35,7 @@ Config.Dispatch = {
     showUnitRoster = true,
     allowMultipleUnits = true,
     requireClaimBeforeResponding = false,
-    notifyCallerOnStatusChange = true,
-    dispatcherPriorityRouting = true,
-    dispatcherDepartment = 'dispatch',
-    unitLocationUpdateSeconds = 10
-}
-
-Config.UnitStatuses = {
-    { id = 'available', label = 'Available' },
-    { id = 'busy', label = 'Busy' },
-    { id = 'enroute', label = 'En Route' },
-    { id = 'onscene', label = 'On Scene' },
-    { id = 'unavailable', label = 'Unavailable' }
-}
-
-Config.Departments = {
-    { id = 'police', label = 'Police', defaultRadio = 'LEO' },
-    { id = 'fire', label = 'Fire', defaultRadio = 'FIRE' },
-    { id = 'ems', label = 'EMS', defaultRadio = 'EMS' },
-    { id = 'tow', label = 'Tow / Service', defaultRadio = 'SERVICE' },
-    { id = 'dispatch', label = 'Dispatch', defaultRadio = 'DISPATCH' }
+    notifyCallerOnStatusChange = true
 }
 
 Config.Blips = {
@@ -71,23 +44,7 @@ Config.Blips = {
     color = 1,
     scale = 0.9,
     routeColor = 1,
-    shortRange = false,
-    flashPriorityOne = true,
-    defaultDurationSeconds = 300
-}
-
-Config.Sounds = {
-    enabled = true,
-    priorityOne = { name = 'TIMER_STOP', set = 'HUD_MINI_GAME_SOUNDSET' },
-    normal = { name = 'SELECT', set = 'HUD_FRONTEND_DEFAULT_SOUNDSET' }
-}
-
-Config.Panic = {
-    enabled = true,
-    serviceId = '911',
-    templateId = 'officer_distress',
-    code = '10-99',
-    departments = { 'police', 'dispatch' }
+    shortRange = false
 }
 
 Config.Services = {
@@ -100,14 +57,13 @@ Config.Services = {
         accent = '#ef4444',
         allowAnonymous = true,
         templates = {
-            { id = 'shots_fired', label = 'Shots Fired', code = '10-71', category = 'Police', priority = 1, departments = { 'police', 'dispatch' }, message = 'I am reporting shots fired near {street}. ' },
-            { id = 'robbery', label = 'Robbery in Progress', code = '10-31', category = 'Police', priority = 1, departments = { 'police', 'dispatch' }, message = 'I am reporting a robbery in progress near {street}. ' },
-            { id = 'reckless_driver', label = 'Reckless Driver', code = '10-94', category = 'Police', priority = 2, departments = { 'police', 'dispatch' }, message = 'I am reporting a reckless driver near {street}. ' },
-            { id = 'medical', label = 'Medical Emergency', code = 'MED-1', category = 'EMS', priority = 1, departments = { 'ems', 'fire', 'dispatch' }, message = 'I need medical assistance near {street}. ' },
-            { id = 'collision', label = 'Vehicle Collision', code = 'MVC', category = 'Fire / EMS', priority = 2, departments = { 'police', 'fire', 'ems', 'dispatch' }, message = 'I am reporting a vehicle collision near {street}. ' },
-            { id = 'fire', label = 'Structure / Vehicle Fire', code = 'FIRE-1', category = 'Fire', priority = 1, departments = { 'fire', 'ems', 'dispatch' }, message = 'I am reporting a fire near {street}. ' },
-            { id = 'officer_distress', label = 'Officer in Distress', code = '10-99', category = 'Police', priority = 1, departments = { 'police', 'dispatch' }, hiddenFromCaller = true, message = 'Emergency assistance requested by an officer near {street}.' },
-            { id = 'other', label = 'Other Emergency', code = '911', category = 'Other', priority = 2, departments = { 'police', 'fire', 'ems', 'dispatch' }, message = 'I need emergency assistance near {street}. ' }
+            { id = 'shots_fired', label = 'Shots Fired', category = 'Police', priority = 1, message = 'I am reporting shots fired near {street}. ' },
+            { id = 'robbery', label = 'Robbery in Progress', category = 'Police', priority = 1, message = 'I am reporting a robbery in progress near {street}. ' },
+            { id = 'reckless_driver', label = 'Reckless Driver', category = 'Police', priority = 2, message = 'I am reporting a reckless driver near {street}. ' },
+            { id = 'medical', label = 'Medical Emergency', category = 'EMS', priority = 1, message = 'I need medical assistance near {street}. ' },
+            { id = 'collision', label = 'Vehicle Collision', category = 'Fire / EMS', priority = 2, message = 'I am reporting a vehicle collision near {street}. ' },
+            { id = 'fire', label = 'Fire', category = 'Fire', priority = 1, message = 'I am reporting a fire near {street}. ' },
+            { id = 'other', label = 'Other Emergency', category = 'Other', priority = 2, message = 'I need emergency assistance near {street}. ' }
         }
     },
     {
@@ -119,11 +75,11 @@ Config.Services = {
         accent = '#3b82f6',
         allowAnonymous = true,
         templates = {
-            { id = 'tow', label = 'Tow Required', code = 'SERVICE', category = 'Service', priority = 3, departments = { 'tow', 'dispatch' }, message = 'A tow service is required near {street}. ' },
-            { id = 'disabled_vehicle', label = 'Disabled Vehicle', code = 'ROAD', category = 'Traffic', priority = 3, departments = { 'police', 'tow', 'dispatch' }, message = 'There is a disabled vehicle near {street}. ' },
-            { id = 'road_hazard', label = 'Road Hazard', code = 'HAZARD', category = 'Traffic', priority = 3, departments = { 'police', 'tow', 'dispatch' }, message = 'I am reporting a road hazard near {street}. ' },
-            { id = 'noise', label = 'Noise Complaint', code = 'NOISE', category = 'Police', priority = 3, departments = { 'police', 'dispatch' }, message = 'I would like to report a noise complaint near {street}. ' },
-            { id = 'other', label = 'Other Non-Emergency', code = '311', category = 'Other', priority = 3, departments = { 'police', 'tow', 'dispatch' }, message = 'I need non-emergency assistance near {street}. ' }
+            { id = 'tow', label = 'Tow Required', category = 'Service', priority = 3, message = 'A tow service is required near {street}. ' },
+            { id = 'disabled_vehicle', label = 'Disabled Vehicle', category = 'Traffic', priority = 3, message = 'There is a disabled vehicle near {street}. ' },
+            { id = 'road_hazard', label = 'Road Hazard', category = 'Traffic', priority = 3, message = 'I am reporting a road hazard near {street}. ' },
+            { id = 'noise', label = 'Noise Complaint', category = 'Police', priority = 3, message = 'I would like to report a noise complaint near {street}. ' },
+            { id = 'other', label = 'Other Non-Emergency', category = 'Other', priority = 3, message = 'I need non-emergency assistance near {street}. ' }
         }
     }
 }
@@ -131,8 +87,7 @@ Config.Services = {
 Config.Notifications = {
     newCall = true,
     statusChanges = true,
-    unitChanges = true,
-    callerMessages = true
+    unitChanges = true
 }
 
 Config.Discord = {
@@ -141,6 +96,5 @@ Config.Discord = {
     username = 'Simple911',
     avatarUrl = '',
     logStatusChanges = true,
-    logNotes = false,
-    logCallerChat = false
+    logNotes = false
 }
