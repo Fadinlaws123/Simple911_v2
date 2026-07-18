@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simple911</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,11 +14,11 @@
     <section id="callsPanel" class="calls-panel hidden">
         <header>
             <div>
-                <span class="eyebrow">Simple911</span>
+                <span class="eyebrow"><i class="fa-solid fa-tower-broadcast"></i> Simple911</span>
                 <h1>Recent 911 Calls</h1>
                 <p>Review active calls, attach to missed incidents, and manage your current response.</p>
             </div>
-            <button id="closeCalls" class="icon-button">×</button>
+            <button id="closeCalls" class="icon-button" aria-label="Close recent calls"><i class="fa-solid fa-xmark"></i></button>
         </header>
         <div id="callsList" class="calls-list"></div>
     </section>
