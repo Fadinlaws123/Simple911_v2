@@ -3,25 +3,12 @@ local Blips = {}
 local VisibleCards = {}
 local Focused = false
 
-local FocusControls = {
-    A = 34, B = 29, C = 26, D = 35, E = 38, F = 23, G = 47, H = 74,
-    K = 311, L = 182, M = 244, N = 249, Q = 44, R = 45, S = 33,
-    T = 245, U = 303, V = 0, W = 32, X = 73, Y = 246, Z = 20,
-    F1 = 288, F2 = 289, F3 = 170, F5 = 166, F6 = 167, F7 = 168,
-    F8 = 169, F9 = 56, F10 = 57,
-    LEFTSHIFT = 21, LEFTCTRL = 36, SPACE = 22
-}
-
 local function notify(message, kind)
     SendNUIMessage({ action = 'toast', message = message, kind = kind or 'info' })
 end
 
 local function getConfiguredFocusKey()
-    return string.upper(tostring(Config.Focus.key or 'N'))
-end
-
-local function getFocusControl()
-    return FocusControls[getConfiguredFocusKey()]
+    return string.upper(tostring(Config.Focus.defaultKey or 'N'))
 end
 
 local function hasVisibleCards()
@@ -146,9 +133,22 @@ local function sendResponderChatCall(call)
     })
 end
 
+-- Manual fallback command.
 RegisterCommand(Config.Commands.focus, function()
     toggleFocus()
 end, false)
+
+-- Fresh internal mapping name so old saved /911focus or /simple911focus binds cannot fire it.
+-- FiveM stores player keybinds client-side, while Config.Focus.defaultKey is the default for new binds.
+RegisterCommand('+simple911_interact_card', function()
+    toggleFocus()
+end, false)
+
+RegisterCommand('-simple911_interact_card', function()
+    -- Required release command for key mappings. Intentionally empty.
+end, false)
+
+RegisterKeyMapping('+simple911_interact_card', Config.Focus.helpText, 'keyboard', Config.Focus.defaultKey)
 
 RegisterCommand(Config.Commands.emergency, function(_, args)
     local message = table.concat(args, ' ')
@@ -330,22 +330,10 @@ RegisterNUICallback('closeCallout', function(data, cb)
 end)
 
 CreateThread(function()
-    local warnedInvalidKey = false
-
     while true do
-        local waitTime = 500
-        local control = getFocusControl()
-
-        if control and hasVisibleCards() and not Focused then
-            waitTime = 0
-            if IsControlJustPressed(0, control) or IsDisabledControlJustPressed(0, control) then
-                toggleFocus()
-            end
-        elseif not control and not warnedInvalidKey then
-            warnedInvalidKey = true
-            print(('[Simple911] Unsupported Config.Focus.key "%s". Use /%s or choose a supported key.'):format(getConfiguredFocusKey(), Config.Commands.focus))
+        Wait(0)
+        if Focused and IsControlJustReleased(0, 322) then
+            setFocus(false)
         end
-
-        Wait(waitTime)
     end
 end)
