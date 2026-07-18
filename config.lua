@@ -5,7 +5,8 @@ Config.Locale = 'en'
 
 Config.Commands = {
     dispatch = 'dispatch',
-    toggleDuty = '911duty'
+    toggleDuty = '911duty',
+    cancelLastCall = 'cancel911'
 }
 
 Config.ResponderAccess = {
@@ -20,9 +21,21 @@ Config.Cooldown = {
 
 Config.CallSettings = {
     maxMessageLength = 500,
+    maxNoteLength = 280,
     maxActiveCalls = 100,
-    resolvedRetentionSeconds = 300,
-    anonymousLabel = 'Anonymous Caller'
+    resolvedRetentionSeconds = 900,
+    anonymousLabel = 'Anonymous Caller',
+    allowCallerCancel = true,
+    allowPriorityChanges = true,
+    defaultCallsignPrefix = 'UNIT'
+}
+
+Config.Dispatch = {
+    showResolvedCalls = true,
+    showUnitRoster = true,
+    allowMultipleUnits = true,
+    requireClaimBeforeResponding = false,
+    notifyCallerOnStatusChange = true
 }
 
 Config.Blips = {
@@ -73,12 +86,15 @@ Config.Services = {
 
 Config.Notifications = {
     newCall = true,
-    statusChanges = true
+    statusChanges = true,
+    unitChanges = true
 }
 
 Config.Discord = {
     enabled = false,
     webhook = '',
     username = 'Simple911',
-    avatarUrl = ''
+    avatarUrl = '',
+    logStatusChanges = true,
+    logNotes = false
 }
