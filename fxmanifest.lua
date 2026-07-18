@@ -15,10 +15,9 @@ client_scripts {
     'client/main.lua'
 }
 
-server_scripts {
-    'server/main.lua',
-    'server/discord.lua'
-}
+-- Load Discord handlers first so they are registered before any 911 calls are created.
+server_script 'server/discord.lua'
+server_script 'server/main.lua'
 
 files {
     'web/index.html',
