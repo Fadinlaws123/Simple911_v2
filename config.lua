@@ -7,11 +7,13 @@ Config.Commands = {
     calls = '911calls',
     waypoint = '911wp',
     clear = '911clear',
-    focus = '911focus'
+    -- Intentionally renamed so old persisted FiveM keybinds for /911focus
+    -- cannot continue triggering the interaction key.
+    focus = 'simple911focus'
 }
 
--- Direct key handling is used instead of RegisterKeyMapping so changing this
--- value actually changes the key after a resource restart.
+-- The notification focus key is read directly from the GTA/FiveM control map.
+-- Restart the resource after changing this value.
 Config.Focus = {
     key = 'N',
     helpText = 'Focus active 911 call notifications'
@@ -35,7 +37,23 @@ Config.Notifications = {
     useNuiPopup = true,
     popupDuration = 12000,
     showChatMessage = true,
-    notifyCaller = true
+    notifyCaller = true,
+
+    -- Standard FiveM chat:addMessage HTML template.
+    -- Placeholders:
+    -- {0} = Call ID
+    -- {1} = Location
+    -- {2} = Message
+    -- {3} = Focus key
+    -- {4} = Waypoint command
+    chatTemplate = [[
+        <div style="padding: 8px 10px; margin: 3px 0; background: rgba(15, 23, 42, 0.92); border-left: 3px solid #ef4444; border-radius: 5px;">
+            <div style="font-weight: 800; color: #f87171; margin-bottom: 3px;">911 CALL #{0}</div>
+            <div style="color: #fca5a5; font-size: 12px; margin-bottom: 3px;">{1}</div>
+            <div style="color: #f8fafc; font-size: 13px;">{2}</div>
+            <div style="color: #94a3b8; font-size: 11px; margin-top: 5px;">Press [{3}] to interact • /{4} {0} to set a waypoint</div>
+        </div>
+    ]]
 }
 
 Config.Sound = {
