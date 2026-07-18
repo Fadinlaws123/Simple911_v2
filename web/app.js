@@ -90,23 +90,19 @@ function renderAlertCard(callId) {
                 </div>
                 <span class="call-time">${relativeTime(call.createdAt)}</span>
             </div>
-
             <div class="alert-location-row">
                 <span class="location-icon">◆</span>
                 <div><small>LOCATION</small><strong>${escapeHtml(call.location)}</strong></div>
             </div>
-
             <div class="message-card">
                 <small>CALL DETAILS</small>
                 <p>${escapeHtml(call.message)}</p>
             </div>
-
             ${(data.showCallerName || data.showCallerServerId) ? `
                 <div class="caller-row">
                     <span>CALLER</span>
                     <strong>${data.showCallerName ? escapeHtml(call.callerName) : ''}${data.showCallerServerId ? ` · ID ${call.callerId}` : ''}</strong>
                 </div>` : ''}
-
             ${active ? `
                 <div class="response-block">
                     <div class="primary-unit-row">
@@ -116,7 +112,6 @@ function renderAlertCard(callId) {
                     <div class="attached-units">${attachedSummary(call)}</div>
                     ${call.status === 'onscene' && call.onSceneBy ? `<div class="arrival-note">On scene confirmed by ${escapeHtml(call.onSceneBy.name)}</div>` : ''}
                 </div>` : ''}
-
             <div class="alert-actions">
                 ${actionButton}
                 <span>${focused ? 'Interaction enabled' : `Press ${escapeHtml(currentFocusKey)} to interact`}</span>
@@ -192,27 +187,73 @@ function clearCards() {
     callStates.clear();
 }
 
+function recentCallStatus(call) {
+    if (call.status === 'onscene') return { label: 'On Scene', className: 'recent-onscene' };
+    if (call.status === 'enroute') return { label: 'En Route', className: 'recent-enroute' };
+    return { label: 'Awaiting Unit', className: 'recent-new' };
+}
+
+function recentUnitSummary(call) {
+    const primary = call.primaryUnit?.name;
+    const attached = call.attachedUnits || [];
+    if (!primary) return '<span class="recent-unit-empty">No unit assigned yet</span>';
+
+    const attachedText = attached.length
+        ? `<span class="recent-attached">+${attached.length} attached</span>`
+        : '<span class="recent-attached muted">No additional units</span>';
+
+    return `
+        <div class="recent-unit-line">
+            <span class="recent-primary-label">PRIMARY</span>
+            <strong>${escapeHtml(primary)}</strong>
+            ${attachedText}
+        </div>`;
+}
+
 function openCalls(data) {
     const calls = data.calls || [];
     callsPanel.classList.remove('hidden');
+
     if (!calls.length) {
-        callsList.innerHTML = '<div class="empty-state"><h3>No recent calls</h3><p>The city has, against all historical evidence, decided to behave itself.</p></div>';
+        callsList.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">✓</div>
+                <h3>No recent 911 calls</h3>
+                <p>Nothing active right now. Enjoy the suspiciously peaceful five minutes.</p>
+            </div>`;
         return;
     }
 
     callsList.innerHTML = calls.map(call => {
-        const primary = call.primaryUnit?.name || 'Unassigned';
-        const attached = (call.attachedUnits || []).length;
-        const label = call.status === 'onscene' ? 'On Scene' : call.status === 'enroute' ? `Primary: ${escapeHtml(primary)}` : 'Unassigned';
+        const status = recentCallStatus(call);
+        const role = getRole(call, data.selfServerId);
         return `
-            <article class="call-row">
-                <div class="call-id">#${call.id}</div>
-                <div class="call-content">
-                    <div class="call-heading"><strong>${escapeHtml(call.location)}</strong><span>${relativeTime(call.createdAt)}</span></div>
-                    <p>${escapeHtml(call.message)}</p>
-                    <div class="row-meta"><span>${label}</span>${call.status !== 'new' ? `<span>${attached} attached</span>` : ''}</div>
+            <article class="recent-call-card ${status.className}">
+                <div class="recent-call-accent"></div>
+                <div class="recent-call-main">
+                    <div class="recent-call-top">
+                        <div class="recent-call-title">
+                            <span class="recent-call-number">911 CALL #${call.id}</span>
+                            <span class="recent-status-pill">${status.label}</span>
+                        </div>
+                        <span class="recent-time">${relativeTime(call.createdAt)}</span>
+                    </div>
+
+                    <div class="recent-location">
+                        <span>◆</span>
+                        <strong>${escapeHtml(call.location)}</strong>
+                    </div>
+
+                    <p class="recent-message">${escapeHtml(call.message)}</p>
+
+                    <div class="recent-footer">
+                        <div class="recent-units">
+                            ${recentUnitSummary(call)}
+                            ${role !== 'observer' ? `<span class="recent-role">YOU: ${role.toUpperCase()}</span>` : ''}
+                        </div>
+                        <button class="row-waypoint" data-call-id="${call.id}">Set Waypoint</button>
+                    </div>
                 </div>
-                <button class="row-waypoint" data-call-id="${call.id}">Waypoint</button>
             </article>`;
     }).join('');
 
