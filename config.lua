@@ -10,8 +10,10 @@ Config.Commands = {
     focus = '911focus'
 }
 
+-- Direct key handling is used instead of RegisterKeyMapping so changing this
+-- value actually changes the key after a resource restart.
 Config.Focus = {
-    defaultKey = 'F6',
+    key = 'N',
     helpText = 'Focus active 911 call notifications'
 }
 
@@ -32,7 +34,7 @@ Config.CallSettings = {
 Config.Notifications = {
     useNuiPopup = true,
     popupDuration = 12000,
-    showChatMessage = false,
+    showChatMessage = true,
     notifyCaller = true
 }
 
@@ -66,6 +68,7 @@ Config.Messages = {
     submitted = 'Your 911 call has been sent to emergency responders.',
     noPermission = 'You do not have permission to view 911 calls.',
     noCalls = 'There are no recent 911 calls.',
+    noVisibleCalls = 'There are no active 911 cards to interact with.',
     invalidCall = 'That 911 call could not be found.',
     waypointSet = 'Waypoint set for 911 call #%s.',
     callsCleared = 'Your local 911 call history has been cleared.',
