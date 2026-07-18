@@ -15,6 +15,27 @@ local function sanitize(value, maxLength)
     return value
 end
 
+local function responderProfile(source)
+    return {
+        source = source,
+        name = GetPlayerName(source) or ('Responder %s'):format(source)
+    }
+end
+
+local function attachedList(call)
+    local list = {}
+    for source, unit in pairs(call.attachedUnits or {}) do
+        list[#list + 1] = {
+            source = source,
+            name = unit.name
+        }
+    end
+    table.sort(list, function(a, b)
+        return a.name < b.name
+    end)
+    return list
+end
+
 local function publicCall(call)
     return {
         id = call.id,
@@ -24,7 +45,10 @@ local function publicCall(call)
         location = call.location,
         coords = call.coords,
         createdAt = call.createdAt,
-        expiresAt = call.expiresAt
+        expiresAt = call.expiresAt,
+        status = call.primaryUnit and 'enroute' or 'new',
+        primaryUnit = call.primaryUnit,
+        attachedUnits = attachedList(call)
     }
 end
 
@@ -55,13 +79,52 @@ local function sendDiscordLog(call)
     }), { ['Content-Type'] = 'application/json' })
 end
 
-local function sendCallToResponders(call)
+local function forEachResponder(callback)
     for _, playerId in ipairs(GetPlayers()) do
         local responder = tonumber(playerId)
-        if isResponder(responder) then
-            TriggerClientEvent('simple911:client:receiveCall', responder, publicCall(call))
-        end
+        if isResponder(responder) then callback(responder) end
     end
+end
+
+local function sendCallToResponders(call)
+    local data = publicCall(call)
+    forEachResponder(function(responder)
+        TriggerClientEvent('simple911:client:receiveCall', responder, data)
+    end)
+end
+
+local function broadcastCallUpdate(call)
+    local data = publicCall(call)
+    forEachResponder(function(responder)
+        TriggerClientEvent('simple911:client:updateCall', responder, data)
+    end)
+end
+
+local function broadcastCallClosed(callId, closedBy)
+    forEachResponder(function(responder)
+        TriggerClientEvent('simple911:client:callClosed', responder, callId, closedBy)
+    end)
+end
+
+local function promoteAttachedUnit(call)
+    local nextSource, nextUnit
+    for source, unit in pairs(call.attachedUnits or {}) do
+        nextSource = source
+        nextUnit = unit
+        break
+    end
+
+    if nextSource then
+        call.attachedUnits[nextSource] = nil
+        call.primaryUnit = {
+            source = nextSource,
+            name = nextUnit.name
+        }
+        return true
+    end
+
+    call.primaryUnit = nil
+    return false
 end
 
 RegisterNetEvent('simple911:server:createCall', function(data)
@@ -101,7 +164,9 @@ RegisterNetEvent('simple911:server:createCall', function(data)
         location = location,
         coords = coords,
         createdAt = now,
-        expiresAt = now + Config.CallSettings.activeCallSeconds
+        expiresAt = now + Config.CallSettings.activeCallSeconds,
+        primaryUnit = nil,
+        attachedUnits = {}
     }
 
     Calls[call.id] = call
@@ -115,8 +180,85 @@ RegisterNetEvent('simple911:server:createCall', function(data)
     sendDiscordLog(call)
 
     SetTimeout(Config.CallSettings.activeCallSeconds * 1000, function()
-        if Calls[call.id] then Calls[call.id] = nil end
+        local current = Calls[call.id]
+        if current and not current.primaryUnit then
+            Calls[call.id] = nil
+            broadcastCallClosed(call.id, 'Expired')
+        end
     end)
+end)
+
+RegisterNetEvent('simple911:server:respondToCall', function(callId)
+    local source = source
+    if not isResponder(source) then return end
+
+    callId = tonumber(callId)
+    local call = callId and Calls[callId]
+    if not call then return notify(source, Config.Messages.invalidCall, 'error') end
+
+    if call.primaryUnit and call.primaryUnit.source == source then
+        return notify(source, Config.Messages.alreadyPrimary, 'info')
+    end
+
+    if call.attachedUnits[source] then
+        return notify(source, Config.Messages.alreadyAttached, 'info')
+    end
+
+    local unit = responderProfile(source)
+    if not call.primaryUnit then
+        call.primaryUnit = unit
+        notify(source, Config.Messages.becamePrimary:format(callId), 'success')
+    else
+        call.attachedUnits[source] = unit
+        notify(source, Config.Messages.attached:format(callId), 'success')
+    end
+
+    broadcastCallUpdate(call)
+end)
+
+RegisterNetEvent('simple911:server:detachFromCall', function(callId)
+    local source = source
+    if not isResponder(source) then return end
+
+    callId = tonumber(callId)
+    local call = callId and Calls[callId]
+    if not call then return notify(source, Config.Messages.invalidCall, 'error') end
+
+    if call.primaryUnit and call.primaryUnit.source == source then
+        local oldName = call.primaryUnit.name
+        local promoted = promoteAttachedUnit(call)
+        notify(source, Config.Messages.detached:format(callId), 'success')
+        if promoted then
+            broadcastCallUpdate(call)
+        else
+            call.primaryUnit = nil
+            broadcastCallUpdate(call)
+        end
+        return
+    end
+
+    if call.attachedUnits[source] then
+        call.attachedUnits[source] = nil
+        notify(source, Config.Messages.detached:format(callId), 'success')
+        broadcastCallUpdate(call)
+    end
+end)
+
+RegisterNetEvent('simple911:server:closeCall', function(callId)
+    local source = source
+    if not isResponder(source) then return end
+
+    callId = tonumber(callId)
+    local call = callId and Calls[callId]
+    if not call then return notify(source, Config.Messages.invalidCall, 'error') end
+
+    if not call.primaryUnit or call.primaryUnit.source ~= source then
+        return notify(source, Config.Messages.primaryOnlyClose, 'error')
+    end
+
+    local closedBy = call.primaryUnit.name
+    Calls[callId] = nil
+    broadcastCallClosed(callId, closedBy)
 end)
 
 RegisterNetEvent('simple911:server:requestCalls', function()
@@ -126,6 +268,24 @@ RegisterNetEvent('simple911:server:requestCalls', function()
         return
     end
     TriggerClientEvent('simple911:client:syncCalls', source, getRecentCalls())
+end)
+
+AddEventHandler('playerDropped', function()
+    local source = source
+    Cooldowns[source] = nil
+
+    for _, call in pairs(Calls) do
+        local changed = false
+        if call.primaryUnit and call.primaryUnit.source == source then
+            promoteAttachedUnit(call)
+            changed = true
+        elseif call.attachedUnits and call.attachedUnits[source] then
+            call.attachedUnits[source] = nil
+            changed = true
+        end
+
+        if changed then broadcastCallUpdate(call) end
+    end
 end)
 
 exports('CreateCall', function(data)
@@ -145,7 +305,9 @@ exports('CreateCall', function(data)
         location = sanitize(data.location or 'Unknown Location', 120),
         coords = data.coords,
         createdAt = now,
-        expiresAt = now + Config.CallSettings.activeCallSeconds
+        expiresAt = now + Config.CallSettings.activeCallSeconds,
+        primaryUnit = nil,
+        attachedUnits = {}
     }
 
     Calls[call.id] = call
@@ -153,7 +315,11 @@ exports('CreateCall', function(data)
     sendDiscordLog(call)
 
     SetTimeout(Config.CallSettings.activeCallSeconds * 1000, function()
-        if Calls[call.id] then Calls[call.id] = nil end
+        local current = Calls[call.id]
+        if current and not current.primaryUnit then
+            Calls[call.id] = nil
+            broadcastCallClosed(call.id, 'Expired')
+        end
     end)
 
     return true, call.id
