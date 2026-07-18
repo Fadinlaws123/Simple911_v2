@@ -1,6 +1,7 @@
 local Calls = {}
 local Blips = {}
 local VisibleCards = {}
+local OnSceneReported = {}
 local Focused = false
 
 local function notify(message, kind)
@@ -14,6 +15,15 @@ end
 local function hasVisibleCards()
     for callId, visible in pairs(VisibleCards) do
         if visible and Calls[callId] then return true end
+    end
+    return false
+end
+
+local function isAssignedToCall(call)
+    local serverId = GetPlayerServerId(PlayerId())
+    if call.primaryUnit and tonumber(call.primaryUnit.source) == serverId then return true end
+    for _, unit in ipairs(call.attachedUnits or {}) do
+        if tonumber(unit.source) == serverId then return true end
     end
     return false
 end
@@ -48,7 +58,7 @@ local function addCallBlip(call)
     SetBlipColour(blip, Config.Blip.color)
     SetBlipScale(blip, Config.Blip.scale)
     SetBlipAsShortRange(blip, Config.Blip.shortRange)
-    if Config.Blip.flash and call.status ~= 'enroute' then SetBlipFlashes(blip, true) end
+    if Config.Blip.flash and call.status == 'new' then SetBlipFlashes(blip, true) end
     BeginTextCommandSetBlipName('STRING')
     AddTextComponentString(('911 Call #%s'):format(call.id))
     EndTextCommandSetBlipName(blip)
@@ -65,7 +75,7 @@ local function addCallBlip(call)
 
     SetTimeout(Config.Blip.durationSeconds * 1000, function()
         local current = Calls[call.id]
-        if current and current.status ~= 'enroute' then removeCallBlips(call.id) end
+        if current and current.status == 'new' then removeCallBlips(call.id) end
     end)
 end
 
@@ -119,7 +129,6 @@ end
 
 local function sendResponderChatCall(call)
     if not Config.Notifications.showChatMessage then return end
-
     TriggerEvent('chat:addMessage', {
         template = Config.Notifications.chatTemplate,
         multiline = true,
@@ -133,36 +142,18 @@ local function sendResponderChatCall(call)
     })
 end
 
--- Manual fallback command.
-RegisterCommand(Config.Commands.focus, function()
-    toggleFocus()
-end, false)
+RegisterCommand(Config.Commands.focus, function() toggleFocus() end, false)
 
--- Fresh internal mapping name so old saved /911focus or /simple911focus binds cannot fire it.
--- FiveM stores player keybinds client-side, while Config.Focus.defaultKey is the default for new binds.
-RegisterCommand('+simple911_interact_card', function()
-    toggleFocus()
-end, false)
-
-RegisterCommand('-simple911_interact_card', function()
-    -- Required release command for key mappings. Intentionally empty.
-end, false)
-
+RegisterCommand('+simple911_interact_card', function() toggleFocus() end, false)
+RegisterCommand('-simple911_interact_card', function() end, false)
 RegisterKeyMapping('+simple911_interact_card', Config.Focus.helpText, 'keyboard', Config.Focus.defaultKey)
 
 RegisterCommand(Config.Commands.emergency, function(_, args)
     local message = table.concat(args, ' ')
-    if message == '' then
-        notify(Config.Messages.usage, 'error')
-        return
-    end
+    if message == '' then return notify(Config.Messages.usage, 'error') end
 
     local location, coords = getLocationData()
-    TriggerServerEvent('simple911:server:createCall', {
-        message = message,
-        location = location,
-        coords = coords
-    })
+    TriggerServerEvent('simple911:server:createCall', { message = message, location = location, coords = coords })
 end, false)
 
 RegisterCommand(Config.Commands.calls, function()
@@ -170,22 +161,16 @@ RegisterCommand(Config.Commands.calls, function()
 end, false)
 
 RegisterCommand(Config.Commands.waypoint, function(_, args)
-    if args[1] then
-        setWaypoint(args[1])
-        return
-    end
-
+    if args[1] then return setWaypoint(args[1]) end
     local newest
-    for _, call in pairs(Calls) do
-        if not newest or call.id > newest.id then newest = call end
-    end
-
+    for _, call in pairs(Calls) do if not newest or call.id > newest.id then newest = call end end
     if newest then setWaypoint(newest.id) else notify(Config.Messages.noCalls, 'error') end
 end, false)
 
 RegisterCommand(Config.Commands.clear, function()
     Calls = {}
     VisibleCards = {}
+    OnSceneReported = {}
     for callId in pairs(Blips) do removeCallBlips(callId) end
     setFocus(false)
     SendNUIMessage({ action = 'syncCalls', calls = {} })
@@ -200,21 +185,16 @@ end)
 RegisterNetEvent('simple911:client:receiveCall', function(call)
     Calls[call.id] = call
     VisibleCards[call.id] = true
+    OnSceneReported[call.id] = nil
     addCallBlip(call)
 
-    if Config.Sound.enabled then
-        PlaySoundFrontend(-1, Config.Sound.name, Config.Sound.soundSet, true)
-    end
-
-    if Config.Notifications.useNuiPopup then
-        sendCallToUi('newCall', call, Config.Notifications.popupDuration)
-    end
-
+    if Config.Sound.enabled then PlaySoundFrontend(-1, Config.Sound.name, Config.Sound.soundSet, true) end
+    if Config.Notifications.useNuiPopup then sendCallToUi('newCall', call, Config.Notifications.popupDuration) end
     sendResponderChatCall(call)
 
     SetTimeout(Config.Notifications.popupDuration, function()
         local current = Calls[call.id]
-        if current and current.status ~= 'enroute' then
+        if current and current.status == 'new' then
             VisibleCards[call.id] = nil
             if Focused and not hasVisibleCards() then setFocus(false) end
         end
@@ -225,7 +205,10 @@ RegisterNetEvent('simple911:client:updateCall', function(call)
     Calls[call.id] = call
     VisibleCards[call.id] = true
 
-    if call.status == 'enroute' and call.coords and not Blips[call.id] then
+    if call.status == 'enroute' then OnSceneReported[call.id] = nil end
+    if call.status == 'onscene' then OnSceneReported[call.id] = true end
+
+    if (call.status == 'enroute' or call.status == 'onscene') and call.coords and not Blips[call.id] then
         addCallBlip(call)
     end
 
@@ -236,6 +219,7 @@ RegisterNetEvent('simple911:client:callClosed', function(callId, closedBy)
     callId = tonumber(callId)
     Calls[callId] = nil
     VisibleCards[callId] = nil
+    OnSceneReported[callId] = nil
     removeCallBlips(callId)
     SendNUIMessage({ action = 'removeCall', callId = callId })
 
@@ -288,7 +272,6 @@ RegisterNUICallback('respondCall', function(data, cb)
         cb({ ok = false })
         return
     end
-
     setWaypoint(callId)
     TriggerServerEvent('simple911:server:respondToCall', callId)
     setFocus(false)
@@ -302,7 +285,6 @@ RegisterNUICallback('attachCall', function(data, cb)
         cb({ ok = false })
         return
     end
-
     setWaypoint(callId)
     TriggerServerEvent('simple911:server:respondToCall', callId)
     setFocus(false)
@@ -323,7 +305,6 @@ RegisterNUICallback('closeCallout', function(data, cb)
         cb({ ok = false })
         return
     end
-
     TriggerServerEvent('simple911:server:closeCall', callId)
     setFocus(false)
     cb({ ok = true })
@@ -332,8 +313,25 @@ end)
 CreateThread(function()
     while true do
         Wait(0)
-        if Focused and IsControlJustReleased(0, 322) then
-            setFocus(false)
+        if Focused and IsControlJustReleased(0, 322) then setFocus(false) end
+    end
+end)
+
+CreateThread(function()
+    while true do
+        Wait(Config.OnScene.enabled and Config.OnScene.checkIntervalMs or 5000)
+
+        if Config.OnScene.enabled then
+            local playerCoords = GetEntityCoords(PlayerPedId())
+            for callId, call in pairs(Calls) do
+                if call.status == 'enroute' and call.coords and isAssignedToCall(call) and not OnSceneReported[callId] then
+                    local callCoords = vector3(call.coords.x, call.coords.y, call.coords.z)
+                    if #(playerCoords - callCoords) <= Config.OnScene.radius then
+                        OnSceneReported[callId] = true
+                        TriggerServerEvent('simple911:server:markOnScene', callId)
+                    end
+                end
+            end
         end
     end
 end)
