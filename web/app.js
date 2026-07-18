@@ -147,97 +147,106 @@ function clearCards() {
 }
 
 function recentCallStatus(call) {
-    if (call.status === 'onscene') return { label: 'ON SCENE', className: 'recent-onscene', icon: '✓' };
-    if (call.status === 'enroute') return { label: 'EN ROUTE', className: 'recent-enroute', icon: '↗' };
-    return { label: 'NEW', className: 'recent-new', icon: '!' };
+    if (call.status === 'onscene') return { label: 'ON SCENE', className: 'recent-onscene', icon: '✓', subtitle: 'Units have arrived' };
+    if (call.status === 'enroute') return { label: 'EN ROUTE', className: 'recent-enroute', icon: '↗', subtitle: 'Response in progress' };
+    return { label: 'NEW CALL', className: 'recent-new', icon: '!', subtitle: 'Waiting for a unit' };
 }
 
 function recentActionButtons(call, role) {
     const active = call.status === 'enroute' || call.status === 'onscene';
-    const keepOpen = 'data-keep-open="true"';
-
     if (!active) {
-        return `<button class="recent-action primary-action" data-action="respondCall" data-call-id="${call.id}" ${keepOpen}>Respond & Waypoint</button>`;
+        return `<button class="recent-action recent-primary" data-action="respondCall" data-call-id="${call.id}">Respond & Waypoint</button>`;
     }
     if (role === 'primary') {
-        return `<button class="recent-action secondary-action" data-action="waypoint" data-call-id="${call.id}" ${keepOpen}>Waypoint</button><button class="recent-action danger-action" data-action="closeCallout" data-call-id="${call.id}" ${keepOpen}>Close Callout</button>`;
+        return `<button class="recent-action recent-secondary" data-action="waypoint" data-call-id="${call.id}">Waypoint</button><button class="recent-action recent-danger" data-action="closeCallout" data-call-id="${call.id}">Close Callout</button>`;
     }
     if (role === 'attached') {
-        return `<button class="recent-action secondary-action" data-action="waypoint" data-call-id="${call.id}" ${keepOpen}>Waypoint</button><button class="recent-action secondary-action" data-action="detachCall" data-call-id="${call.id}" ${keepOpen}>Detach</button>`;
+        return `<button class="recent-action recent-secondary" data-action="waypoint" data-call-id="${call.id}">Waypoint</button><button class="recent-action recent-muted" data-action="detachCall" data-call-id="${call.id}">Detach</button>`;
     }
-    return `<button class="recent-action secondary-action" data-action="waypoint" data-call-id="${call.id}" ${keepOpen}>Waypoint</button><button class="recent-action primary-action" data-action="attachCall" data-call-id="${call.id}" ${keepOpen}>Attach & Waypoint</button>`;
+    return `<button class="recent-action recent-secondary" data-action="waypoint" data-call-id="${call.id}">Waypoint</button><button class="recent-action recent-primary" data-action="attachCall" data-call-id="${call.id}">Attach & Waypoint</button>`;
 }
 
 function attachedUnitsText(call) {
     const units = call.attachedUnits || [];
-    if (!units.length) return '<span class="recent-empty-copy">No additional units attached</span>';
-    return units.slice(0, 3).map(unit => `<span class="recent-unit-chip">${escapeHtml(unit.name)}</span>`).join('') + (units.length > 3 ? `<span class="recent-unit-chip">+${units.length - 3}</span>` : '');
+    if (!units.length) return '<span class="recent-empty-copy">No additional units</span>';
+    return units.slice(0, 4).map(unit => `<span class="recent-unit-chip">${escapeHtml(unit.name)}</span>`).join('') + (units.length > 4 ? `<span class="recent-unit-chip recent-more-chip">+${units.length - 4}</span>` : '');
 }
 
 function renderRecentCalls() {
     if (!recentCalls.length) {
-        callsList.innerHTML = `<div class="empty-state"><div class="empty-icon">✓</div><h3>No active 911 calls</h3><p>Nothing waiting for a response right now. Suspiciously peaceful, but we will take it.</p></div>`;
+        callsList.innerHTML = `<div class="recent-empty-state"><div class="recent-empty-icon">✓</div><h3>No active 911 calls</h3><p>Nothing currently needs a response.</p></div>`;
         return;
     }
 
     callsList.innerHTML = recentCalls.map(call => {
         const status = recentCallStatus(call);
         const role = getRole(call, recentSelfServerId);
-        const primary = call.primaryUnit?.name || 'Unassigned';
-        const roleLabel = role === 'primary' ? 'PRIMARY UNIT' : role === 'attached' ? 'ATTACHED UNIT' : null;
+        const primary = call.primaryUnit?.name || 'No primary unit';
+        const roleLabel = role === 'primary' ? 'You are primary' : role === 'attached' ? 'You are attached' : 'Not assigned';
+        const caller = call.callerName || 'Unknown Caller';
 
         return `
             <article class="recent-call-card ${status.className}">
-                <div class="recent-call-accent"></div>
-                <div class="recent-call-main">
-                    <div class="recent-call-header">
-                        <div class="recent-status-icon">${status.icon}</div>
-                        <div class="recent-call-heading-group">
-                            <div class="recent-call-title-row">
-                                <span class="recent-call-number">911 CALL #${call.id}</span>
+                <div class="recent-card-accent"></div>
+                <div class="recent-card-shell">
+                    <div class="recent-card-header">
+                        <div class="recent-status-mark">${status.icon}</div>
+                        <div class="recent-heading-copy">
+                            <div class="recent-kicker-row">
+                                <span class="recent-call-number">CALL #${call.id}</span>
                                 <span class="recent-status-pill">${status.label}</span>
-                                ${roleLabel ? `<span class="recent-role-badge">YOU: ${roleLabel}</span>` : ''}
                             </div>
-                            <strong class="recent-call-location">${escapeHtml(call.location)}</strong>
+                            <h3>${escapeHtml(call.location)}</h3>
+                            <p>${status.subtitle} · ${relativeTime(call.createdAt)}</p>
                         </div>
-                        <span class="recent-time">${relativeTime(call.createdAt)}</span>
+                        <span class="recent-role-pill ${role !== 'observer' ? 'active' : ''}">${roleLabel}</span>
                     </div>
 
-                    <div class="recent-detail-card">
-                        <span class="recent-section-label">CALL DETAILS</span>
-                        <p>${escapeHtml(call.message)}</p>
+                    <div class="recent-card-content">
+                        <div class="recent-main-column">
+                            <div class="recent-section recent-details-section">
+                                <span class="recent-section-label">CALL DETAILS</span>
+                                <p>${escapeHtml(call.message)}</p>
+                            </div>
+                            <div class="recent-caller-line">
+                                <span>Caller</span>
+                                <strong>${escapeHtml(caller)}</strong>
+                            </div>
+                        </div>
+
+                        <div class="recent-response-column">
+                            <div class="recent-response-box">
+                                <span class="recent-section-label">PRIMARY UNIT</span>
+                                <strong>${escapeHtml(primary)}</strong>
+                            </div>
+                            <div class="recent-response-box">
+                                <div class="recent-box-heading">
+                                    <span class="recent-section-label">ATTACHED UNITS</span>
+                                    <span class="recent-count-badge">${(call.attachedUnits || []).length}</span>
+                                </div>
+                                <div class="recent-unit-list">${attachedUnitsText(call)}</div>
+                            </div>
+                            ${call.status === 'onscene' && call.onSceneBy ? `<div class="recent-onscene-line"><span>✓</span><div><small>ON SCENE CONFIRMED BY</small><strong>${escapeHtml(call.onSceneBy.name)}</strong></div></div>` : ''}
+                        </div>
                     </div>
 
-                    <div class="recent-response-grid">
-                        <div class="recent-unit-card">
-                            <span class="recent-section-label">PRIMARY UNIT</span>
-                            <strong>${escapeHtml(primary)}</strong>
-                        </div>
-                        <div class="recent-unit-card">
-                            <span class="recent-section-label">ATTACHED UNITS</span>
-                            <div class="recent-unit-list">${attachedUnitsText(call)}</div>
-                        </div>
-                    </div>
-
-                    ${call.status === 'onscene' && call.onSceneBy ? `<div class="recent-onscene-note"><span>✓</span> On scene confirmed by <strong>${escapeHtml(call.onSceneBy.name)}</strong></div>` : ''}
-
-                    <div class="recent-card-footer">
-                        <div class="recent-card-meta">
-                            <span>${(call.attachedUnits || []).length} attached</span>
-                            <span>•</span>
-                            <span>${role === 'observer' ? 'Not assigned to you' : `You are ${role}`}</span>
-                        </div>
-                        <div class="recent-actions">${recentActionButtons(call, role)}</div>
+                    <div class="recent-card-actions">
+                        ${recentActionButtons(call, role)}
                     </div>
                 </div>
             </article>`;
     }).join('');
 
     callsList.querySelectorAll('[data-action][data-call-id]').forEach(button => {
-        button.addEventListener('click', () => {
+        button.addEventListener('click', async () => {
             const callId = Number(button.dataset.callId);
             const action = button.dataset.action;
-            post(action, { callId, keepPanelOpen: button.dataset.keepOpen === 'true' });
+            button.disabled = true;
+            try {
+                await post(action, { callId });
+            } finally {
+                await post('close');
+            }
         });
     });
 }
