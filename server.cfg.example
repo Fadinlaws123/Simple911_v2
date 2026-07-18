@@ -1,0 +1,9 @@
+# Simple911 v2
+ensure Simple911_v2
+
+# Give a group access to responder/dispatch features.
+# Replace group.admin with the group used by your server.
+add_ace group.admin simple911.responder allow
+
+# Example: give one identifier responder access directly.
+# add_ace identifier.license:YOUR_LICENSE_HERE simple911.responder allow
