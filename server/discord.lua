@@ -4,13 +4,6 @@ local function discordEnabled()
     return Config.Discord and Config.Discord.enabled and type(Config.Discord.webhook) == 'string' and Config.Discord.webhook ~= ''
 end
 
-local function auditWebhook()
-    if Config.Discord.auditWebhook and Config.Discord.auditWebhook ~= '' then
-        return Config.Discord.auditWebhook
-    end
-    return Config.Discord.webhook
-end
-
 local function webhookUrl(base, wait)
     if wait then
         return base .. (base:find('?', 1, true) and '&wait=true' or '?wait=true')
@@ -35,7 +28,18 @@ local function attachedNames(call)
     return #names > 0 and table.concat(names, '\n') or 'None'
 end
 
-local function mainEmbed(call, closedBy)
+local function activityText(activity)
+    if not activity or #activity == 0 then return '• Call created' end
+
+    local first = math.max(1, #activity - ((Config.Discord.maxActivityEntries or 8) - 1))
+    local lines = {}
+    for index = first, #activity do
+        lines[#lines + 1] = activity[index]
+    end
+    return table.concat(lines, '\n')
+end
+
+local function mainEmbed(call, activity, closedBy)
     local statusLabel, color = statusMeta(call.status)
     if closedBy then
         statusLabel = 'CLOSED'
@@ -48,7 +52,8 @@ local function mainEmbed(call, closedBy)
         { name = 'Caller', value = call.callerName or 'Unknown Caller', inline = true },
         { name = 'Call Details', value = call.message or 'No details provided.', inline = false },
         { name = 'Primary Unit', value = call.primaryUnit and call.primaryUnit.name or 'Unassigned', inline = true },
-        { name = 'Attached Units', value = attachedNames(call), inline = true }
+        { name = 'Attached Units', value = attachedNames(call), inline = true },
+        { name = 'Activity', value = activityText(activity), inline = false }
     }
 
     if call.status == 'onscene' and call.onSceneBy then
@@ -61,7 +66,7 @@ local function mainEmbed(call, closedBy)
 
     return {
         title = ('🚨 911 Call #%s'):format(call.id),
-        description = closedBy and 'This emergency call has been closed.' or 'Live emergency call status. This message updates as responders handle the call.',
+        description = closedBy and 'This emergency call has been closed.' or 'Live emergency call record. This embed updates as responders handle the call.',
         color = color,
         fields = fields,
         footer = { text = 'Simple911 • Live Call Record' },
@@ -75,46 +80,28 @@ local function request(url, method, payload, callback)
     end, method, json.encode(payload), { ['Content-Type'] = 'application/json' })
 end
 
-local function createLiveMessage(call, callback)
-    local payload = {
+local function createLiveMessage(call, tracked)
+    request(webhookUrl(Config.Discord.webhook, true), 'POST', {
         username = Config.Discord.username,
         avatar_url = Config.Discord.avatarUrl ~= '' and Config.Discord.avatarUrl or nil,
-        embeds = { mainEmbed(call) }
-    }
-
-    request(webhookUrl(Config.Discord.webhook, true), 'POST', payload, function(statusCode, body)
+        embeds = { mainEmbed(call, tracked.activity) }
+    }, function(statusCode, body)
         if statusCode >= 200 and statusCode < 300 and body and body ~= '' then
             local ok, decoded = pcall(json.decode, body)
-            if ok and decoded and decoded.id then callback(decoded.id) end
+            if ok and decoded and decoded.id and TrackedCalls[call.id] then
+                TrackedCalls[call.id].messageId = decoded.id
+            end
         end
     end)
 end
 
-local function editLiveMessage(messageId, call, closedBy)
-    if not messageId then return end
-    local payload = {
+local function editLiveMessage(tracked, call, closedBy)
+    if not tracked.messageId then return end
+
+    request(('%s/messages/%s'):format(Config.Discord.webhook, tracked.messageId), 'PATCH', {
         username = Config.Discord.username,
         avatar_url = Config.Discord.avatarUrl ~= '' and Config.Discord.avatarUrl or nil,
-        embeds = { mainEmbed(call, closedBy) }
-    }
-    request(('%s/messages/%s'):format(Config.Discord.webhook, messageId), 'PATCH', payload)
-end
-
-local function sendAudit(title, description, color)
-    if not Config.Discord.logActions then return end
-    local webhook = auditWebhook()
-    if not webhook or webhook == '' then return end
-
-    request(webhook, 'POST', {
-        username = Config.Discord.username,
-        avatar_url = Config.Discord.avatarUrl ~= '' and Config.Discord.avatarUrl or nil,
-        embeds = {{
-            title = title,
-            description = description,
-            color = color or 3447003,
-            footer = { text = 'Simple911 • Action Log' },
-            timestamp = os.date('!%Y-%m-%dT%H:%M:%SZ')
-        }}
+        embeds = { mainEmbed(call, tracked.activity, closedBy) }
     })
 end
 
@@ -126,6 +113,10 @@ local function unitMap(units)
     return map
 end
 
+local function addActivity(tracked, text)
+    tracked.activity[#tracked.activity + 1] = ('• %s'):format(text)
+end
+
 local function snapshot(call)
     return {
         data = call,
@@ -133,51 +124,43 @@ local function snapshot(call)
         primarySource = call.primaryUnit and tostring(call.primaryUnit.source) or nil,
         primaryName = call.primaryUnit and call.primaryUnit.name or nil,
         attached = unitMap(call.attachedUnits),
-        messageId = nil
+        messageId = nil,
+        activity = { '• Call created' }
     }
 end
 
-local function processChanges(previous, call)
-    local callId = call.id
+local function processChanges(tracked, call)
     local currentPrimarySource = call.primaryUnit and tostring(call.primaryUnit.source) or nil
     local currentPrimaryName = call.primaryUnit and call.primaryUnit.name or nil
     local currentAttached = unitMap(call.attachedUnits)
 
-    if previous.primarySource ~= currentPrimarySource and currentPrimarySource then
-        sendAudit(
-            ('🚓 Primary Unit Assigned • Call #%s'):format(callId),
-            ('**%s** is now the primary unit.\n**Location:** %s'):format(currentPrimaryName or 'Unknown Unit', call.location or 'Unknown Location'),
-            3447003
-        )
+    if tracked.primarySource ~= currentPrimarySource and currentPrimarySource then
+        addActivity(tracked, ('%s became the Primary Unit'):format(currentPrimaryName or 'Unknown Unit'))
+    elseif tracked.primarySource and not currentPrimarySource then
+        addActivity(tracked, 'Primary Unit cleared')
     end
 
     for source, name in pairs(currentAttached) do
-        if not previous.attached[source] then
-            sendAudit(
-                ('➕ Unit Attached • Call #%s'):format(callId),
-                ('**%s** attached to the call.\n**Primary:** %s'):format(name, currentPrimaryName or 'Unassigned'),
-                10181046
-            )
+        if not tracked.attached[source] then
+            addActivity(tracked, ('%s attached to the call'):format(name))
         end
     end
 
-    for source, name in pairs(previous.attached) do
+    for source, name in pairs(tracked.attached) do
         if not currentAttached[source] then
-            sendAudit(
-                ('➖ Unit Detached • Call #%s'):format(callId),
-                ('**%s** detached from the call.'):format(name),
-                9807270
-            )
+            addActivity(tracked, ('%s detached from the call'):format(name))
         end
     end
 
-    if previous.status ~= call.status and call.status == 'onscene' then
-        sendAudit(
-            ('✅ Units On Scene • Call #%s'):format(callId),
-            ('**Confirmed by:** %s\n**Location:** %s'):format(call.onSceneBy and call.onSceneBy.name or currentPrimaryName or 'Unknown Unit', call.location or 'Unknown Location'),
-            5763719
-        )
+    if tracked.status ~= call.status and call.status == 'onscene' then
+        addActivity(tracked, ('%s arrived On Scene'):format(call.onSceneBy and call.onSceneBy.name or currentPrimaryName or 'A responder'))
     end
+
+    tracked.data = call
+    tracked.status = call.status
+    tracked.primarySource = currentPrimarySource
+    tracked.primaryName = currentPrimaryName
+    tracked.attached = currentAttached
 end
 
 CreateThread(function()
@@ -197,31 +180,18 @@ CreateThread(function()
                 if not tracked then
                     tracked = snapshot(call)
                     TrackedCalls[call.id] = tracked
-                    createLiveMessage(call, function(messageId)
-                        if TrackedCalls[call.id] then
-                            TrackedCalls[call.id].messageId = messageId
-                        end
-                    end)
+                    createLiveMessage(call, tracked)
                 else
                     processChanges(tracked, call)
-                    editLiveMessage(tracked.messageId, call)
-                    tracked.data = call
-                    tracked.status = call.status
-                    tracked.primarySource = call.primaryUnit and tostring(call.primaryUnit.source) or nil
-                    tracked.primaryName = call.primaryUnit and call.primaryUnit.name or nil
-                    tracked.attached = unitMap(call.attachedUnits)
+                    editLiveMessage(tracked, call)
                 end
             end
 
             for callId, tracked in pairs(TrackedCalls) do
                 if not seen[callId] then
                     local closedBy = tracked.primaryName or 'System / Expired'
-                    editLiveMessage(tracked.messageId, tracked.data, closedBy)
-                    sendAudit(
-                        ('🔒 Call Closed • Call #%s'):format(callId),
-                        ('**Closed by:** %s\n**Location:** %s'):format(closedBy, tracked.data.location or 'Unknown Location'),
-                        9807270
-                    )
+                    addActivity(tracked, ('Call closed by %s'):format(closedBy))
+                    editLiveMessage(tracked, tracked.data, closedBy)
                     TrackedCalls[callId] = nil
                 end
             end
