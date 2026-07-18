@@ -13,13 +13,13 @@ end
 
 local function statusMeta(status, closedBy)
     if closedBy then
-        return 'CLOSED', 9807270, '🔒'
+        return 'CLOSED', 9807270, '🔒', 'Incident Closed'
     elseif status == 'onscene' then
-        return 'ON SCENE', 5763719, '🟢'
+        return 'ON SCENE', 5763719, '🟢', 'Units On Scene'
     elseif status == 'enroute' then
-        return 'EN ROUTE', 3447003, '🔵'
+        return 'EN ROUTE', 3447003, '🔵', 'Response In Progress'
     end
-    return 'AWAITING UNIT', 15158332, '🔴'
+    return 'AWAITING UNIT', 15158332, '🔴', 'Awaiting Response'
 end
 
 local function formatTimestamp(timestamp)
@@ -29,11 +29,11 @@ end
 
 local function attachedNames(call)
     local units = call.attachedUnits or {}
-    if #units == 0 then return 'None' end
+    if #units == 0 then return '`None`' end
 
     local names = {}
     for _, unit in ipairs(units) do
-        names[#names + 1] = ('• %s'):format(unit.name or ('ID %s'):format(unit.source or '?'))
+        names[#names + 1] = ('• **%s**'):format(unit.name or ('ID %s'):format(unit.source or '?'))
     end
     return table.concat(names, '\n')
 end
@@ -58,64 +58,82 @@ end
 local function responseSummary(call, closedBy)
     local primary = call.primaryUnit and call.primaryUnit.name or 'Unassigned'
     local attachedCount = #(call.attachedUnits or {})
+
     local lines = {
-        ('**Primary Unit:** %s'):format(primary),
-        ('**Additional Units:** %s'):format(attachedCount)
+        ('**Primary Unit**\n%s'):format(primary),
+        '',
+        ('**Attached Units**\n%s'):format(attachedCount)
     }
 
     if call.onSceneBy then
-        lines[#lines + 1] = ('**On Scene Confirmed By:** %s'):format(call.onSceneBy.name or 'Unknown Unit')
+        lines[#lines + 1] = ''
+        lines[#lines + 1] = ('**On Scene Confirmed By**\n%s'):format(call.onSceneBy.name or 'Unknown Unit')
     end
 
     if closedBy then
-        lines[#lines + 1] = ('**Closed By:** %s'):format(closedBy)
+        lines[#lines + 1] = ''
+        lines[#lines + 1] = ('**Closed By**\n%s'):format(closedBy)
     end
 
     return table.concat(lines, '\n')
 end
 
 local function mainEmbed(call, activity, closedBy)
-    local statusLabel, color, statusIcon = statusMeta(call.status, closedBy)
+    local statusLabel, color, statusIcon, statusTitle = statusMeta(call.status, closedBy)
     local caller = call.callerName or 'Unknown Caller'
     local callerId = call.callerId and tostring(call.callerId) or 'N/A'
     local location = call.location or 'Unknown Location'
     local details = call.message or 'No details provided.'
+    local primary = call.primaryUnit and call.primaryUnit.name or 'Unassigned'
+    local attachedCount = #(call.attachedUnits or {})
 
     local description = table.concat({
-        ('### %s %s'):format(statusIcon, statusLabel),
-        closedBy and 'This 911 incident has been closed.' or 'This message is the live record for this 911 incident and updates automatically as responders handle the call.',
+        ('## %s 911 CALL #%s'):format(statusIcon, call.id),
+        ('### %s'):format(statusTitle),
         '',
-        ('> **%s**'):format(details)
+        ('> **%s**'):format(details),
+        '',
+        ('**📍 Location**\n%s'):format(location)
     }, '\n')
 
     local fields = {
         {
-            name = '📍 Incident Location',
-            value = ('**%s**'):format(location),
-            inline = false
-        },
-        {
-            name = '👤 Caller Information',
-            value = ('**Name:** %s\n**Server ID:** %s'):format(caller, callerId),
+            name = '👤 Caller',
+            value = ('**%s**\n`Server ID: %s`'):format(caller, callerId),
             inline = true
         },
         {
-            name = '🕒 Call Received',
+            name = '🕒 Received',
             value = formatTimestamp(call.createdAt),
             inline = true
         },
         {
-            name = '🚓 Response Overview',
-            value = responseSummary(call, closedBy),
-            inline = false
+            name = '📡 Current Status',
+            value = ('**%s**'):format(statusLabel),
+            inline = true
         },
         {
-            name = '👥 Attached Units',
+            name = '🚓 Primary Unit',
+            value = ('**%s**'):format(primary),
+            inline = true
+        },
+        {
+            name = '👥 Attached',
+            value = ('**%s unit(s)**'):format(attachedCount),
+            inline = true
+        },
+        {
+            name = '🧭 Response Overview',
+            value = responseSummary(call, closedBy),
+            inline = true
+        },
+        {
+            name = '👮 Responding Units',
             value = attachedNames(call),
             inline = false
         },
         {
-            name = '📋 Incident Activity',
+            name = '📜 Activity Timeline',
             value = activityText(activity),
             inline = false
         }
@@ -123,14 +141,16 @@ local function mainEmbed(call, activity, closedBy)
 
     return {
         author = {
-            name = 'Simple911 • Emergency Communications'
+            name = 'Simple911 • Live Emergency Incident'
         },
-        title = ('911 Incident #%s'):format(call.id),
+        title = ('%s %s'):format(statusIcon, statusLabel),
         description = description,
         color = color,
         fields = fields,
         footer = {
-            text = closedBy and 'Simple911 • Incident Closed' or 'Simple911 • Live Incident Record • Updates Automatically'
+            text = closedBy
+                and ('Simple911 • Call #%s • Closed'):format(call.id)
+                or ('Simple911 • Call #%s • Live record updates automatically'):format(call.id)
         },
         timestamp = os.date('!%Y-%m-%dT%H:%M:%SZ')
     }
