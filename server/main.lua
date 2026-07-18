@@ -16,23 +16,15 @@ local function sanitize(value, maxLength)
 end
 
 local function responderProfile(source)
-    return {
-        source = source,
-        name = GetPlayerName(source) or ('Responder %s'):format(source)
-    }
+    return { source = source, name = GetPlayerName(source) or ('Responder %s'):format(source) }
 end
 
 local function attachedList(call)
     local list = {}
     for source, unit in pairs(call.attachedUnits or {}) do
-        list[#list + 1] = {
-            source = source,
-            name = unit.name
-        }
+        list[#list + 1] = { source = source, name = unit.name }
     end
-    table.sort(list, function(a, b)
-        return a.name < b.name
-    end)
+    table.sort(list, function(a, b) return a.name < b.name end)
     return list
 end
 
@@ -46,9 +38,10 @@ local function publicCall(call)
         coords = call.coords,
         createdAt = call.createdAt,
         expiresAt = call.expiresAt,
-        status = call.primaryUnit and 'enroute' or 'new',
+        status = call.status or (call.primaryUnit and 'enroute' or 'new'),
         primaryUnit = call.primaryUnit,
-        attachedUnits = attachedList(call)
+        attachedUnits = attachedList(call),
+        onSceneBy = call.onSceneBy
     }
 end
 
@@ -109,22 +102,24 @@ end
 local function promoteAttachedUnit(call)
     local nextSource, nextUnit
     for source, unit in pairs(call.attachedUnits or {}) do
-        nextSource = source
-        nextUnit = unit
+        nextSource, nextUnit = source, unit
         break
     end
 
     if nextSource then
         call.attachedUnits[nextSource] = nil
-        call.primaryUnit = {
-            source = nextSource,
-            name = nextUnit.name
-        }
+        call.primaryUnit = { source = nextSource, name = nextUnit.name }
         return true
     end
 
     call.primaryUnit = nil
+    call.status = 'new'
+    call.onSceneBy = nil
     return false
+end
+
+local function isAssignedToCall(call, source)
+    return (call.primaryUnit and call.primaryUnit.source == source) or (call.attachedUnits and call.attachedUnits[source] ~= nil)
 end
 
 RegisterNetEvent('simple911:server:createCall', function(data)
@@ -134,21 +129,14 @@ RegisterNetEvent('simple911:server:createCall', function(data)
     local now = os.time()
     local lastCall = Cooldowns[source]
     if lastCall and now - lastCall < Config.CallSettings.cooldownSeconds then
-        local remaining = Config.CallSettings.cooldownSeconds - (now - lastCall)
-        notify(source, Config.Messages.cooldown:format(remaining), 'error')
-        return
+        return notify(source, Config.Messages.cooldown:format(Config.CallSettings.cooldownSeconds - (now - lastCall)), 'error')
     end
 
     local message = sanitize(data.message, Config.CallSettings.maxMessageLength)
-    if message == '' then
-        notify(source, Config.Messages.empty, 'error')
-        return
-    end
+    if message == '' then return notify(source, Config.Messages.empty, 'error') end
 
     local coords = data.coords
-    if type(coords) ~= 'table' or type(coords.x) ~= 'number' or type(coords.y) ~= 'number' or type(coords.z) ~= 'number' then
-        coords = nil
-    end
+    if type(coords) ~= 'table' or type(coords.x) ~= 'number' or type(coords.y) ~= 'number' or type(coords.z) ~= 'number' then coords = nil end
 
     NextCallId = NextCallId + 1
     local callerName = GetPlayerName(source) or ('Player %s'):format(source)
@@ -165,17 +153,15 @@ RegisterNetEvent('simple911:server:createCall', function(data)
         coords = coords,
         createdAt = now,
         expiresAt = now + Config.CallSettings.activeCallSeconds,
+        status = 'new',
         primaryUnit = nil,
-        attachedUnits = {}
+        attachedUnits = {},
+        onSceneBy = nil
     }
 
     Calls[call.id] = call
     Cooldowns[source] = now
-
-    if Config.Notifications.notifyCaller then
-        notify(source, Config.Messages.submitted, 'success')
-    end
-
+    if Config.Notifications.notifyCaller then notify(source, Config.Messages.submitted, 'success') end
     sendCallToResponders(call)
     sendDiscordLog(call)
 
@@ -196,23 +182,34 @@ RegisterNetEvent('simple911:server:respondToCall', function(callId)
     local call = callId and Calls[callId]
     if not call then return notify(source, Config.Messages.invalidCall, 'error') end
 
-    if call.primaryUnit and call.primaryUnit.source == source then
-        return notify(source, Config.Messages.alreadyPrimary, 'info')
-    end
-
-    if call.attachedUnits[source] then
-        return notify(source, Config.Messages.alreadyAttached, 'info')
-    end
+    if call.primaryUnit and call.primaryUnit.source == source then return notify(source, Config.Messages.alreadyPrimary, 'info') end
+    if call.attachedUnits[source] then return notify(source, Config.Messages.alreadyAttached, 'info') end
 
     local unit = responderProfile(source)
     if not call.primaryUnit then
         call.primaryUnit = unit
+        call.status = 'enroute'
+        call.onSceneBy = nil
         notify(source, Config.Messages.becamePrimary:format(callId), 'success')
     else
         call.attachedUnits[source] = unit
         notify(source, Config.Messages.attached:format(callId), 'success')
     end
 
+    broadcastCallUpdate(call)
+end)
+
+RegisterNetEvent('simple911:server:markOnScene', function(callId)
+    local source = source
+    if not Config.OnScene.enabled or not isResponder(source) then return end
+
+    callId = tonumber(callId)
+    local call = callId and Calls[callId]
+    if not call or call.status ~= 'enroute' or not isAssignedToCall(call, source) then return end
+
+    call.status = 'onscene'
+    call.onSceneBy = responderProfile(source)
+    if Config.OnScene.notifyUnit then notify(source, Config.Messages.onScene:format(callId), 'success') end
     broadcastCallUpdate(call)
 end)
 
@@ -225,15 +222,10 @@ RegisterNetEvent('simple911:server:detachFromCall', function(callId)
     if not call then return notify(source, Config.Messages.invalidCall, 'error') end
 
     if call.primaryUnit and call.primaryUnit.source == source then
-        local oldName = call.primaryUnit.name
         local promoted = promoteAttachedUnit(call)
         notify(source, Config.Messages.detached:format(callId), 'success')
-        if promoted then
-            broadcastCallUpdate(call)
-        else
-            call.primaryUnit = nil
-            broadcastCallUpdate(call)
-        end
+        if promoted and call.status == 'new' then call.status = 'enroute' end
+        broadcastCallUpdate(call)
         return
     end
 
@@ -251,10 +243,7 @@ RegisterNetEvent('simple911:server:closeCall', function(callId)
     callId = tonumber(callId)
     local call = callId and Calls[callId]
     if not call then return notify(source, Config.Messages.invalidCall, 'error') end
-
-    if not call.primaryUnit or call.primaryUnit.source ~= source then
-        return notify(source, Config.Messages.primaryOnlyClose, 'error')
-    end
+    if not call.primaryUnit or call.primaryUnit.source ~= source then return notify(source, Config.Messages.primaryOnlyClose, 'error') end
 
     local closedBy = call.primaryUnit.name
     Calls[callId] = nil
@@ -263,10 +252,7 @@ end)
 
 RegisterNetEvent('simple911:server:requestCalls', function()
     local source = source
-    if not isResponder(source) then
-        notify(source, Config.Messages.noPermission, 'error')
-        return
-    end
+    if not isResponder(source) then return notify(source, Config.Messages.noPermission, 'error') end
     TriggerClientEvent('simple911:client:syncCalls', source, getRecentCalls())
 end)
 
@@ -278,19 +264,18 @@ AddEventHandler('playerDropped', function()
         local changed = false
         if call.primaryUnit and call.primaryUnit.source == source then
             promoteAttachedUnit(call)
+            if call.primaryUnit and call.status == 'new' then call.status = 'enroute' end
             changed = true
         elseif call.attachedUnits and call.attachedUnits[source] then
             call.attachedUnits[source] = nil
             changed = true
         end
-
         if changed then broadcastCallUpdate(call) end
     end
 end)
 
 exports('CreateCall', function(data)
     if type(data) ~= 'table' then return false, 'invalid_data' end
-
     local message = sanitize(data.message, Config.CallSettings.maxMessageLength)
     if message == '' then return false, 'invalid_message' end
 
@@ -306,8 +291,10 @@ exports('CreateCall', function(data)
         coords = data.coords,
         createdAt = now,
         expiresAt = now + Config.CallSettings.activeCallSeconds,
+        status = 'new',
         primaryUnit = nil,
-        attachedUnits = {}
+        attachedUnits = {},
+        onSceneBy = nil
     }
 
     Calls[call.id] = call
