@@ -1,5 +1,7 @@
 local Calls = {}
 local Blips = {}
+local Focused = false
+local RespondingTo = {}
 
 local function notify(message, kind)
     SendNUIMessage({ action = 'toast', message = message, kind = kind or 'info' })
@@ -16,14 +18,21 @@ local function getLocationData()
     return location, { x = coords.x, y = coords.y, z = coords.z }
 end
 
+local function removeCallBlips(callId)
+    local list = Blips[callId]
+    if not list then return end
+
+    for _, blip in ipairs(list) do
+        if DoesBlipExist(blip) then RemoveBlip(blip) end
+    end
+
+    Blips[callId] = nil
+end
+
 local function addCallBlip(call)
     if not Config.Blip.enabled or not call.coords then return end
 
-    if Blips[call.id] then
-        for _, blip in ipairs(Blips[call.id]) do
-            if DoesBlipExist(blip) then RemoveBlip(blip) end
-        end
-    end
+    removeCallBlips(call.id)
 
     local created = {}
     local blip = AddBlipForCoord(call.coords.x, call.coords.y, call.coords.z)
@@ -47,11 +56,8 @@ local function addCallBlip(call)
     Blips[call.id] = created
 
     SetTimeout(Config.Blip.durationSeconds * 1000, function()
-        if Blips[call.id] then
-            for _, current in ipairs(Blips[call.id]) do
-                if DoesBlipExist(current) then RemoveBlip(current) end
-            end
-            Blips[call.id] = nil
+        if not RespondingTo[call.id] then
+            removeCallBlips(call.id)
         end
     end)
 end
@@ -61,12 +67,30 @@ local function setWaypoint(callId)
     local call = callId and Calls[callId]
     if not call or not call.coords then
         notify(Config.Messages.invalidCall, 'error')
-        return
+        return false
     end
 
     SetNewWaypoint(call.coords.x, call.coords.y)
     notify(Config.Messages.waypointSet:format(call.id), 'success')
+    return true
 end
+
+local function setFocus(state)
+    Focused = state == true
+    SetNuiFocus(Focused, Focused)
+    SendNUIMessage({ action = 'setFocusState', focused = Focused })
+end
+
+local function toggleFocus()
+    setFocus(not Focused)
+    notify(Focused and Config.Messages.focusEnabled or Config.Messages.focusDisabled, 'info')
+end
+
+RegisterCommand(Config.Commands.focus, function()
+    toggleFocus()
+end, false)
+
+RegisterKeyMapping(Config.Commands.focus, Config.Focus.helpText, 'keyboard', Config.Focus.defaultKey)
 
 RegisterCommand(Config.Commands.emergency, function(_, args)
     local message = table.concat(args, ' ')
@@ -103,12 +127,8 @@ end, false)
 
 RegisterCommand(Config.Commands.clear, function()
     Calls = {}
-    for callId, list in pairs(Blips) do
-        for _, blip in ipairs(list) do
-            if DoesBlipExist(blip) then RemoveBlip(blip) end
-        end
-        Blips[callId] = nil
-    end
+    RespondingTo = {}
+    for callId in pairs(Blips) do removeCallBlips(callId) end
     SendNUIMessage({ action = 'syncCalls', calls = {} })
     notify(Config.Messages.callsCleared, 'success')
 end, false)
@@ -131,7 +151,9 @@ RegisterNetEvent('simple911:client:receiveCall', function(call)
             call = call,
             duration = Config.Notifications.popupDuration,
             showCallerName = Config.CallSettings.showCallerName,
-            showCallerServerId = Config.CallSettings.showCallerServerId
+            showCallerServerId = Config.CallSettings.showCallerServerId,
+            responding = RespondingTo[call.id] == true,
+            focusKey = Config.Focus.defaultKey
         })
     end
 
@@ -153,16 +175,65 @@ RegisterNetEvent('simple911:client:syncCalls', function(serverCalls)
         showCallerName = Config.CallSettings.showCallerName,
         showCallerServerId = Config.CallSettings.showCallerServerId
     })
-    SetNuiFocus(true, true)
+    setFocus(true)
 end)
 
 RegisterNUICallback('close', function(_, cb)
-    SetNuiFocus(false, false)
+    setFocus(false)
     SendNUIMessage({ action = 'closeCalls' })
+    cb({ ok = true })
+end)
+
+RegisterNUICallback('releaseFocus', function(_, cb)
+    setFocus(false)
     cb({ ok = true })
 end)
 
 RegisterNUICallback('waypoint', function(data, cb)
     setWaypoint(data.callId)
     cb({ ok = true })
+end)
+
+RegisterNUICallback('respondCall', function(data, cb)
+    local callId = tonumber(data.callId)
+    local call = callId and Calls[callId]
+
+    if not call then
+        notify(Config.Messages.invalidCall, 'error')
+        cb({ ok = false })
+        return
+    end
+
+    RespondingTo[callId] = true
+    setWaypoint(callId)
+    SendNUIMessage({ action = 'callStatusChanged', callId = callId, status = 'enroute' })
+    notify(Config.Messages.responding:format(callId), 'success')
+    setFocus(false)
+    cb({ ok = true })
+end)
+
+RegisterNUICallback('closeCallout', function(data, cb)
+    local callId = tonumber(data.callId)
+    if not callId or not Calls[callId] then
+        notify(Config.Messages.invalidCall, 'error')
+        cb({ ok = false })
+        return
+    end
+
+    RespondingTo[callId] = nil
+    Calls[callId] = nil
+    removeCallBlips(callId)
+    SendNUIMessage({ action = 'removeCall', callId = callId })
+    notify(Config.Messages.calloutClosed:format(callId), 'success')
+    setFocus(false)
+    cb({ ok = true })
+end)
+
+CreateThread(function()
+    while true do
+        Wait(0)
+        if Focused and IsControlJustReleased(0, 322) then
+            setFocus(false)
+        end
+    end
 end)
