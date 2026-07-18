@@ -42,10 +42,15 @@ function getRole(call, selfServerId) {
 function attachedSummary(call) {
     const units = call.attachedUnits || [];
     if (!units.length) return '<span class="unit-empty">No additional units attached</span>';
-
     const visible = units.slice(0, 2).map(unit => `<span class="unit-chip">${escapeHtml(unit.name)}</span>`).join('');
     const extra = units.length > 2 ? `<span class="unit-chip unit-more">+${units.length - 2} more</span>` : '';
     return visible + extra;
+}
+
+function statusInfo(call) {
+    if (call.status === 'onscene') return { title: 'On Scene', label: 'ON SCENE', className: 'onscene' };
+    if (call.status === 'enroute') return { title: 'En Route', label: 'EN ROUTE', className: 'enroute' };
+    return { title: `Call #${call.id}`, label: 'NEW', className: 'incoming' };
 }
 
 function renderAlertCard(callId) {
@@ -53,14 +58,15 @@ function renderAlertCard(callId) {
     if (!state || !state.element) return;
 
     const { call, data, element } = state;
-    const isEnroute = call.status === 'enroute';
+    const active = call.status === 'enroute' || call.status === 'onscene';
+    const status = statusInfo(call);
     const role = getRole(call, data.selfServerId);
     const primaryName = call.primaryUnit?.name || 'Unassigned';
     const attachedCount = (call.attachedUnits || []).length;
     currentFocusKey = String(data.focusKey || currentFocusKey || 'N').toUpperCase();
 
     let actionButton = '';
-    if (!isEnroute) {
+    if (!active) {
         actionButton = '<button class="respond-button primary-action">Respond & Set Waypoint</button>';
     } else if (role === 'primary') {
         actionButton = '<button class="close-callout-button danger-action">Close Callout</button>';
@@ -70,16 +76,16 @@ function renderAlertCard(callId) {
         actionButton = '<button class="attach-call-button primary-action">Attach & Set Waypoint</button>';
     }
 
-    element.className = `call-alert ${isEnroute ? 'enroute' : 'incoming'} role-${role}`;
+    element.className = `call-alert ${status.className} role-${role}`;
     element.innerHTML = `
         <div class="alert-accent"></div>
         <div class="alert-body">
             <div class="alert-top">
                 <div>
-                    <span class="eyebrow">${isEnroute ? 'Active 911 Callout' : 'Incoming 911 Call'}</span>
+                    <span class="eyebrow">${active ? 'Active 911 Callout' : 'Incoming 911 Call'}</span>
                     <div class="title-line">
-                        <h3>${isEnroute ? 'En Route' : `Call #${call.id}`}</h3>
-                        <span class="status-pill ${isEnroute ? 'status-enroute' : 'status-new'}">${isEnroute ? 'EN ROUTE' : 'NEW'}</span>
+                        <h3>${status.title}</h3>
+                        <span class="status-pill status-${status.className}">${status.label}</span>
                     </div>
                 </div>
                 <span class="call-time">${relativeTime(call.createdAt)}</span>
@@ -87,10 +93,7 @@ function renderAlertCard(callId) {
 
             <div class="alert-location-row">
                 <span class="location-icon">◆</span>
-                <div>
-                    <small>LOCATION</small>
-                    <strong>${escapeHtml(call.location)}</strong>
-                </div>
+                <div><small>LOCATION</small><strong>${escapeHtml(call.location)}</strong></div>
             </div>
 
             <div class="message-card">
@@ -104,16 +107,14 @@ function renderAlertCard(callId) {
                     <strong>${data.showCallerName ? escapeHtml(call.callerName) : ''}${data.showCallerServerId ? ` · ID ${call.callerId}` : ''}</strong>
                 </div>` : ''}
 
-            ${isEnroute ? `
+            ${active ? `
                 <div class="response-block">
                     <div class="primary-unit-row">
-                        <div>
-                            <span>PRIMARY UNIT</span>
-                            <strong>${escapeHtml(primaryName)}</strong>
-                        </div>
+                        <div><span>PRIMARY UNIT</span><strong>${escapeHtml(primaryName)}</strong></div>
                         <span class="attached-count">${attachedCount} ATTACHED</span>
                     </div>
                     <div class="attached-units">${attachedSummary(call)}</div>
+                    ${call.status === 'onscene' && call.onSceneBy ? `<div class="arrival-note">On scene confirmed by ${escapeHtml(call.onSceneBy.name)}</div>` : ''}
                 </div>` : ''}
 
             <div class="alert-actions">
@@ -122,14 +123,12 @@ function renderAlertCard(callId) {
             </div>
         </div>`;
 
-    const bindings = [
+    [
         ['.respond-button', 'respondCall'],
         ['.attach-call-button', 'attachCall'],
         ['.detach-call-button', 'detachCall'],
         ['.close-callout-button', 'closeCallout']
-    ];
-
-    bindings.forEach(([selector, endpoint]) => {
+    ].forEach(([selector, endpoint]) => {
         const button = element.querySelector(selector);
         if (!button) return;
         button.addEventListener('click', () => {
@@ -160,11 +159,11 @@ function upsertCallCard(data, persistent = false) {
 
     renderAlertCard(call.id);
 
-    if (!persistent && call.status !== 'enroute') {
+    if (!persistent && call.status === 'new') {
         const duration = Number(data.duration) || 12000;
         state.timer = setTimeout(() => {
             const current = callStates.get(Number(call.id));
-            if (current && current.call.status !== 'enroute' && current.element?.isConnected) {
+            if (current && current.call.status === 'new' && current.element?.isConnected) {
                 current.element.remove();
                 callStates.delete(Number(call.id));
                 post('cardHidden', { callId: call.id });
@@ -204,19 +203,14 @@ function openCalls(data) {
     callsList.innerHTML = calls.map(call => {
         const primary = call.primaryUnit?.name || 'Unassigned';
         const attached = (call.attachedUnits || []).length;
+        const label = call.status === 'onscene' ? 'On Scene' : call.status === 'enroute' ? `Primary: ${escapeHtml(primary)}` : 'Unassigned';
         return `
             <article class="call-row">
                 <div class="call-id">#${call.id}</div>
                 <div class="call-content">
-                    <div class="call-heading">
-                        <strong>${escapeHtml(call.location)}</strong>
-                        <span>${relativeTime(call.createdAt)}</span>
-                    </div>
+                    <div class="call-heading"><strong>${escapeHtml(call.location)}</strong><span>${relativeTime(call.createdAt)}</span></div>
                     <p>${escapeHtml(call.message)}</p>
-                    <div class="row-meta">
-                        <span>${call.status === 'enroute' ? `Primary: ${escapeHtml(primary)}` : 'Unassigned'}</span>
-                        ${call.status === 'enroute' ? `<span>${attached} attached</span>` : ''}
-                    </div>
+                    <div class="row-meta"><span>${label}</span>${call.status !== 'new' ? `<span>${attached} attached</span>` : ''}</div>
                 </div>
                 <button class="row-waypoint" data-call-id="${call.id}">Waypoint</button>
             </article>`;
@@ -234,10 +228,7 @@ window.addEventListener('keydown', event => {
         else if (focused) post('releaseFocus');
         return;
     }
-
-    if (focused && event.key.toUpperCase() === currentFocusKey) {
-        post('releaseFocus');
-    }
+    if (focused && event.key.toUpperCase() === currentFocusKey) post('releaseFocus');
 });
 
 window.addEventListener('message', event => {
