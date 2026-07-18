@@ -7,15 +7,15 @@ Config.Commands = {
     calls = '911calls',
     waypoint = '911wp',
     clear = '911clear',
-    -- Intentionally renamed so old persisted FiveM keybinds for /911focus
-    -- cannot continue triggering the interaction key.
+    -- Manual fallback command. The actual key mapping uses an internal,
+    -- brand-new command name so legacy persisted binds cannot trigger it.
     focus = 'simple911focus'
 }
 
--- The notification focus key is read directly from the GTA/FiveM control map.
--- Restart the resource after changing this value.
 Config.Focus = {
-    key = 'N',
+    -- Default key for new installs. Players can rebind "Focus active 911 call notifications"
+    -- in FiveM Settings > Key Bindings > FiveM.
+    defaultKey = 'N',
     helpText = 'Focus active 911 call notifications'
 }
 
@@ -44,7 +44,7 @@ Config.Notifications = {
     -- {0} = Call ID
     -- {1} = Location
     -- {2} = Message
-    -- {3} = Focus key
+    -- {3} = Default focus key label
     -- {4} = Waypoint command
     chatTemplate = [[
         <div style="padding: 8px 10px; margin: 3px 0; background: rgba(15, 23, 42, 0.92); border-left: 3px solid #ef4444; border-radius: 5px;">
