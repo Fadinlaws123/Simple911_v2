@@ -5,6 +5,8 @@ const callsList = document.getElementById('callsList');
 const callStates = new Map();
 let focused = false;
 let currentFocusKey = 'N';
+let recentCalls = [];
+let recentSelfServerId = null;
 
 const resource = () => typeof GetParentResourceName === 'function' ? GetParentResourceName() : 'Simple911_v2';
 const post = (name, data = {}) => fetch(`https://${resource()}/${name}`, {
@@ -66,15 +68,10 @@ function renderAlertCard(callId) {
     currentFocusKey = String(data.focusKey || currentFocusKey || 'N').toUpperCase();
 
     let actionButton = '';
-    if (!active) {
-        actionButton = '<button class="respond-button primary-action">Respond & Set Waypoint</button>';
-    } else if (role === 'primary') {
-        actionButton = '<button class="close-callout-button danger-action">Close Callout</button>';
-    } else if (role === 'attached') {
-        actionButton = '<button class="detach-call-button secondary-action">Detach From Call</button>';
-    } else {
-        actionButton = '<button class="attach-call-button primary-action">Attach & Set Waypoint</button>';
-    }
+    if (!active) actionButton = '<button class="respond-button primary-action">Respond & Set Waypoint</button>';
+    else if (role === 'primary') actionButton = '<button class="close-callout-button danger-action">Close Callout</button>';
+    else if (role === 'attached') actionButton = '<button class="detach-call-button secondary-action">Detach From Call</button>';
+    else actionButton = '<button class="attach-call-button primary-action">Attach & Set Waypoint</button>';
 
     element.className = `call-alert ${status.className} role-${role}`;
     element.innerHTML = `
@@ -83,60 +80,26 @@ function renderAlertCard(callId) {
             <div class="alert-top">
                 <div>
                     <span class="eyebrow">${active ? 'Active 911 Callout' : 'Incoming 911 Call'}</span>
-                    <div class="title-line">
-                        <h3>${status.title}</h3>
-                        <span class="status-pill status-${status.className}">${status.label}</span>
-                    </div>
+                    <div class="title-line"><h3>${status.title}</h3><span class="status-pill status-${status.className}">${status.label}</span></div>
                 </div>
                 <span class="call-time">${relativeTime(call.createdAt)}</span>
             </div>
-            <div class="alert-location-row">
-                <span class="location-icon">◆</span>
-                <div><small>LOCATION</small><strong>${escapeHtml(call.location)}</strong></div>
-            </div>
-            <div class="message-card">
-                <small>CALL DETAILS</small>
-                <p>${escapeHtml(call.message)}</p>
-            </div>
-            ${(data.showCallerName || data.showCallerServerId) ? `
-                <div class="caller-row">
-                    <span>CALLER</span>
-                    <strong>${data.showCallerName ? escapeHtml(call.callerName) : ''}${data.showCallerServerId ? ` · ID ${call.callerId}` : ''}</strong>
-                </div>` : ''}
-            ${active ? `
-                <div class="response-block">
-                    <div class="primary-unit-row">
-                        <div><span>PRIMARY UNIT</span><strong>${escapeHtml(primaryName)}</strong></div>
-                        <span class="attached-count">${attachedCount} ATTACHED</span>
-                    </div>
-                    <div class="attached-units">${attachedSummary(call)}</div>
-                    ${call.status === 'onscene' && call.onSceneBy ? `<div class="arrival-note">On scene confirmed by ${escapeHtml(call.onSceneBy.name)}</div>` : ''}
-                </div>` : ''}
-            <div class="alert-actions">
-                ${actionButton}
-                <span>${focused ? 'Interaction enabled' : `Press ${escapeHtml(currentFocusKey)} to interact`}</span>
-            </div>
+            <div class="alert-location-row"><span class="location-icon">◆</span><div><small>LOCATION</small><strong>${escapeHtml(call.location)}</strong></div></div>
+            <div class="message-card"><small>CALL DETAILS</small><p>${escapeHtml(call.message)}</p></div>
+            ${(data.showCallerName || data.showCallerServerId) ? `<div class="caller-row"><span>CALLER</span><strong>${data.showCallerName ? escapeHtml(call.callerName) : ''}${data.showCallerServerId ? ` · ID ${call.callerId}` : ''}</strong></div>` : ''}
+            ${active ? `<div class="response-block"><div class="primary-unit-row"><div><span>PRIMARY UNIT</span><strong>${escapeHtml(primaryName)}</strong></div><span class="attached-count">${attachedCount} ATTACHED</span></div><div class="attached-units">${attachedSummary(call)}</div>${call.status === 'onscene' && call.onSceneBy ? `<div class="arrival-note">On scene confirmed by ${escapeHtml(call.onSceneBy.name)}</div>` : ''}</div>` : ''}
+            <div class="alert-actions">${actionButton}<span>${focused ? 'Interaction enabled' : `Press ${escapeHtml(currentFocusKey)} to interact`}</span></div>
         </div>`;
 
-    [
-        ['.respond-button', 'respondCall'],
-        ['.attach-call-button', 'attachCall'],
-        ['.detach-call-button', 'detachCall'],
-        ['.close-callout-button', 'closeCallout']
-    ].forEach(([selector, endpoint]) => {
+    [['.respond-button','respondCall'],['.attach-call-button','attachCall'],['.detach-call-button','detachCall'],['.close-callout-button','closeCallout']].forEach(([selector, endpoint]) => {
         const button = element.querySelector(selector);
-        if (!button) return;
-        button.addEventListener('click', () => {
-            if (!focused) return;
-            post(endpoint, { callId: call.id });
-        });
+        if (button) button.addEventListener('click', () => focused && post(endpoint, { callId: call.id }));
     });
 }
 
 function upsertCallCard(data, persistent = false) {
     const call = data.call;
     let state = callStates.get(Number(call.id));
-
     if (!state) {
         const element = document.createElement('article');
         alertStack.prepend(element);
@@ -146,14 +109,8 @@ function upsertCallCard(data, persistent = false) {
         state.call = call;
         state.data = { ...state.data, ...data };
     }
-
-    if (state.timer) {
-        clearTimeout(state.timer);
-        state.timer = null;
-    }
-
+    if (state.timer) { clearTimeout(state.timer); state.timer = null; }
     renderAlertCard(call.id);
-
     if (!persistent && call.status === 'new') {
         const duration = Number(data.duration) || 12000;
         state.timer = setTimeout(() => {
@@ -177,6 +134,8 @@ function removeCall(callId) {
     if (state?.timer) clearTimeout(state.timer);
     if (state?.element) state.element.remove();
     callStates.delete(Number(callId));
+    recentCalls = recentCalls.filter(call => Number(call.id) !== Number(callId));
+    if (!callsPanel.classList.contains('hidden')) renderRecentCalls();
 }
 
 function clearCards() {
@@ -188,78 +147,75 @@ function clearCards() {
 }
 
 function recentCallStatus(call) {
-    if (call.status === 'onscene') return { label: 'On Scene', className: 'recent-onscene' };
-    if (call.status === 'enroute') return { label: 'En Route', className: 'recent-enroute' };
-    return { label: 'Awaiting Unit', className: 'recent-new' };
+    if (call.status === 'onscene') return { label: 'ON SCENE', className: 'recent-onscene' };
+    if (call.status === 'enroute') return { label: 'EN ROUTE', className: 'recent-enroute' };
+    return { label: 'NEW', className: 'recent-new' };
 }
 
-function recentUnitSummary(call) {
-    const primary = call.primaryUnit?.name;
-    const attached = call.attachedUnits || [];
-    if (!primary) return '<span class="recent-unit-empty">No unit assigned yet</span>';
-
-    const attachedText = attached.length
-        ? `<span class="recent-attached">+${attached.length} attached</span>`
-        : '<span class="recent-attached muted">No additional units</span>';
-
-    return `
-        <div class="recent-unit-line">
-            <span class="recent-primary-label">PRIMARY</span>
-            <strong>${escapeHtml(primary)}</strong>
-            ${attachedText}
-        </div>`;
+function recentActionButtons(call, role) {
+    const active = call.status === 'enroute' || call.status === 'onscene';
+    if (!active) {
+        return `<button class="recent-action primary-action" data-action="respondCall" data-call-id="${call.id}">Respond & Waypoint</button>`;
+    }
+    if (role === 'primary') {
+        return `<button class="recent-action secondary-action" data-action="waypoint" data-call-id="${call.id}">Waypoint</button><button class="recent-action danger-action" data-action="closeCallout" data-call-id="${call.id}">Close Callout</button>`;
+    }
+    if (role === 'attached') {
+        return `<button class="recent-action secondary-action" data-action="waypoint" data-call-id="${call.id}">Waypoint</button><button class="recent-action secondary-action" data-action="detachCall" data-call-id="${call.id}">Detach</button>`;
+    }
+    return `<button class="recent-action secondary-action" data-action="waypoint" data-call-id="${call.id}">Waypoint</button><button class="recent-action primary-action" data-action="attachCall" data-call-id="${call.id}">Attach & Waypoint</button>`;
 }
 
-function openCalls(data) {
-    const calls = data.calls || [];
-    callsPanel.classList.remove('hidden');
-
-    if (!calls.length) {
-        callsList.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">✓</div>
-                <h3>No recent 911 calls</h3>
-                <p>Nothing active right now. Enjoy the suspiciously peaceful five minutes.</p>
-            </div>`;
+function renderRecentCalls() {
+    if (!recentCalls.length) {
+        callsList.innerHTML = `<div class="empty-state"><div class="empty-icon">✓</div><h3>No recent 911 calls</h3><p>Nothing active right now. Enjoy the suspiciously peaceful five minutes.</p></div>`;
         return;
     }
 
-    callsList.innerHTML = calls.map(call => {
+    callsList.innerHTML = recentCalls.map(call => {
         const status = recentCallStatus(call);
-        const role = getRole(call, data.selfServerId);
+        const role = getRole(call, recentSelfServerId);
+        const primary = call.primaryUnit?.name || 'Unassigned';
+        const attached = call.attachedUnits || [];
         return `
             <article class="recent-call-card ${status.className}">
                 <div class="recent-call-accent"></div>
                 <div class="recent-call-main">
                     <div class="recent-call-top">
-                        <div class="recent-call-title">
-                            <span class="recent-call-number">911 CALL #${call.id}</span>
-                            <span class="recent-status-pill">${status.label}</span>
-                        </div>
+                        <div class="recent-call-title"><span class="recent-call-number">911 CALL #${call.id}</span><span class="recent-status-pill">${status.label}</span></div>
                         <span class="recent-time">${relativeTime(call.createdAt)}</span>
                     </div>
-
-                    <div class="recent-location">
-                        <span>◆</span>
-                        <strong>${escapeHtml(call.location)}</strong>
+                    <div class="recent-card-grid">
+                        <div class="recent-info-block recent-location-block"><span class="recent-info-label">LOCATION</span><strong>${escapeHtml(call.location)}</strong></div>
+                        <div class="recent-info-block"><span class="recent-info-label">CALL DETAILS</span><p>${escapeHtml(call.message)}</p></div>
                     </div>
-
-                    <p class="recent-message">${escapeHtml(call.message)}</p>
-
-                    <div class="recent-footer">
-                        <div class="recent-units">
-                            ${recentUnitSummary(call)}
+                    <div class="recent-response-row">
+                        <div class="recent-response-info">
+                            <span class="recent-info-label">PRIMARY UNIT</span>
+                            <strong>${escapeHtml(primary)}</strong>
+                            <span class="recent-attached">${attached.length} attached</span>
                             ${role !== 'observer' ? `<span class="recent-role">YOU: ${role.toUpperCase()}</span>` : ''}
                         </div>
-                        <button class="row-waypoint" data-call-id="${call.id}">Set Waypoint</button>
+                        <div class="recent-actions">${recentActionButtons(call, role)}</div>
                     </div>
                 </div>
             </article>`;
     }).join('');
 
-    callsList.querySelectorAll('[data-call-id]').forEach(button => {
-        button.addEventListener('click', () => post('waypoint', { callId: Number(button.dataset.callId) }));
+    callsList.querySelectorAll('[data-action][data-call-id]').forEach(button => {
+        button.addEventListener('click', () => {
+            const callId = Number(button.dataset.callId);
+            const action = button.dataset.action;
+            post(action, { callId });
+        });
     });
+}
+
+function openCalls(data) {
+    recentCalls = data.calls || [];
+    recentSelfServerId = data.selfServerId;
+    callsPanel.classList.remove('hidden');
+    renderRecentCalls();
 }
 
 document.getElementById('closeCalls').addEventListener('click', () => post('close'));
@@ -276,7 +232,13 @@ window.addEventListener('message', event => {
     const data = event.data || {};
     if (data.action === 'toast') toast(data.message, data.kind);
     if (data.action === 'newCall') upsertCallCard(data, false);
-    if (data.action === 'callUpdated') upsertCallCard(data, true);
+    if (data.action === 'callUpdated') {
+        upsertCallCard(data, true);
+        const index = recentCalls.findIndex(call => Number(call.id) === Number(data.call.id));
+        if (index >= 0) recentCalls[index] = data.call;
+        else recentCalls.unshift(data.call);
+        if (!callsPanel.classList.contains('hidden')) renderRecentCalls();
+    }
     if (data.action === 'openCalls') openCalls(data);
     if (data.action === 'closeCalls') callsPanel.classList.add('hidden');
     if (data.action === 'syncCalls' && Array.isArray(data.calls) && !callsPanel.classList.contains('hidden')) openCalls(data);
