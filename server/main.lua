@@ -54,7 +54,15 @@ local function getRecentCalls()
 end
 
 local function notify(source, message, kind)
+    if not source then return end
     TriggerClientEvent('simple911:client:notify', source, message, kind or 'info')
+end
+
+local function notifyCaller(call, message, kind)
+    if not Config.Notifications.notifyCaller or not call or not call.callerSource then return end
+    if GetPlayerName(call.callerSource) then
+        notify(call.callerSource, message, kind or 'info')
+    end
 end
 
 local function sendDiscordLog(call)
@@ -161,7 +169,7 @@ RegisterNetEvent('simple911:server:createCall', function(data)
 
     Calls[call.id] = call
     Cooldowns[source] = now
-    if Config.Notifications.notifyCaller then notify(source, Config.Messages.submitted, 'success') end
+    notifyCaller(call, Config.Messages.submitted, 'success')
     sendCallToResponders(call)
     sendDiscordLog(call)
 
@@ -191,9 +199,11 @@ RegisterNetEvent('simple911:server:respondToCall', function(callId)
         call.status = 'enroute'
         call.onSceneBy = nil
         notify(source, Config.Messages.becamePrimary:format(callId), 'success')
+        notifyCaller(call, Config.Messages.callerUnitResponding, 'success')
     else
         call.attachedUnits[source] = unit
         notify(source, Config.Messages.attached:format(callId), 'success')
+        notifyCaller(call, Config.Messages.callerAdditionalUnit, 'info')
     end
 
     broadcastCallUpdate(call)
@@ -210,6 +220,7 @@ RegisterNetEvent('simple911:server:markOnScene', function(callId)
     call.status = 'onscene'
     call.onSceneBy = responderProfile(source)
     if Config.OnScene.notifyUnit then notify(source, Config.Messages.onScene:format(callId), 'success') end
+    notifyCaller(call, Config.Messages.callerOnScene, 'success')
     broadcastCallUpdate(call)
 end)
 
@@ -246,6 +257,7 @@ RegisterNetEvent('simple911:server:closeCall', function(callId)
     if not call.primaryUnit or call.primaryUnit.source ~= source then return notify(source, Config.Messages.primaryOnlyClose, 'error') end
 
     local closedBy = call.primaryUnit.name
+    notifyCaller(call, Config.Messages.callerResolved, 'success')
     Calls[callId] = nil
     broadcastCallClosed(callId, closedBy)
 end)
