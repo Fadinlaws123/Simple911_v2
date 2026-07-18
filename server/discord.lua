@@ -1,9 +1,7 @@
 local TrackedCalls = {}
 
 local function webhookConfigured()
-    return Config.Discord
-        and type(Config.Discord.webhook) == 'string'
-        and Config.Discord.webhook ~= ''
+    return Config.Discord and type(Config.Discord.webhook) == 'string' and Config.Discord.webhook ~= ''
 end
 
 local function discordEnabled()
@@ -23,20 +21,30 @@ local function log(message)
 end
 
 local function statusMeta(status, closedBy)
-    if closedBy then return 'CLOSED', 9807270, '🔒', 'Incident Closed' end
-    if status == 'onscene' then return 'ON SCENE', 5763719, '🟢', 'Units On Scene' end
-    if status == 'enroute' then return 'EN ROUTE', 3447003, '🔵', 'Response In Progress' end
+    if closedBy then
+        return 'CLOSED', 9807270, '🔒', 'Incident Closed'
+    end
+    if status == 'onscene' then
+        return 'ON SCENE', 5763719, '🟢', 'Units On Scene'
+    end
+    if status == 'enroute' then
+        return 'EN ROUTE', 3447003, '🔵', 'Response In Progress'
+    end
     return 'AWAITING UNIT', 15158332, '🔴', 'Awaiting Response'
 end
 
 local function formatTimestamp(timestamp)
-    if not timestamp then return 'Unknown' end
+    if not timestamp then
+        return 'Unknown'
+    end
     return ('<t:%s:F>\n<t:%s:R>'):format(timestamp, timestamp)
 end
 
 local function attachedNames(call)
     local units = call.attachedUnits or {}
-    if #units == 0 then return '`None`' end
+    if #units == 0 then
+        return '`None`'
+    end
 
     local names = {}
     for _, unit in ipairs(units) do
@@ -46,7 +54,9 @@ local function attachedNames(call)
 end
 
 local function activityText(activity)
-    if not activity or #activity == 0 then return '> No activity recorded yet.' end
+    if not activity or #activity == 0 then
+        return '> No activity recorded yet.'
+    end
 
     local maximum = (Config.Discord and Config.Discord.maxActivityEntries) or 8
     local first = math.max(1, #activity - maximum + 1)
@@ -66,11 +76,7 @@ end
 local function responseSummary(call, closedBy)
     local primary = call.primaryUnit and call.primaryUnit.name or 'Unassigned'
     local attachedCount = #(call.attachedUnits or {})
-    local lines = {
-        ('**Primary Unit**\n%s'):format(primary),
-        '',
-        ('**Attached Units**\n%s'):format(attachedCount)
-    }
+    local lines = {('**Primary Unit**\n%s'):format(primary), '', ('**Attached Units**\n%s'):format(attachedCount)}
 
     if call.onSceneBy then
         lines[#lines + 1] = ''
@@ -95,30 +101,49 @@ local function mainEmbed(call, activity, closedBy)
     local attachedCount = #(call.attachedUnits or {})
 
     return {
-        author = { name = 'Simple911 • Live Emergency Incident' },
-        title = ('%s %s • Call #%s'):format(statusIcon, statusLabel, call.id),
-        description = table.concat({
-            ('### %s'):format(statusTitle),
-            '',
-            ('> **%s**'):format(details),
-            '',
-            ('**📍 Location**\n%s'):format(location)
-        }, '\n'),
-        color = color,
-        fields = {
-            { name = '👤 Caller', value = ('**%s**\n`Server ID: %s`'):format(caller, callerId), inline = true },
-            { name = '🕒 Received', value = formatTimestamp(call.createdAt), inline = true },
-            { name = '📡 Current Status', value = ('**%s**'):format(statusLabel), inline = true },
-            { name = '🚓 Primary Unit', value = ('**%s**'):format(primary), inline = true },
-            { name = '👥 Attached', value = ('**%s unit(s)**'):format(attachedCount), inline = true },
-            { name = '🧭 Response Overview', value = responseSummary(call, closedBy), inline = true },
-            { name = '👮 Responding Units', value = attachedNames(call), inline = false },
-            { name = '📜 Activity Timeline', value = activityText(activity), inline = false }
+        author = {
+            name = 'Simple911 • Live Emergency Incident'
         },
+        title = ('%s %s • Call #%s'):format(statusIcon, statusLabel, call.id),
+        description = table.concat({('### %s'):format(statusTitle), '', ('> **%s**'):format(details), '',
+                                    ('**📍 Location**\n%s'):format(location)}, '\n'),
+        color = color,
+        fields = {{
+            name = '👤 Caller',
+            value = ('**%s**\n`Server ID: %s`'):format(caller, callerId),
+            inline = true
+        }, {
+            name = '🕒 Received',
+            value = formatTimestamp(call.createdAt),
+            inline = true
+        }, {
+            name = '📡 Current Status',
+            value = ('**%s**'):format(statusLabel),
+            inline = true
+        }, {
+            name = '🚓 Primary Unit',
+            value = ('**%s**'):format(primary),
+            inline = true
+        }, {
+            name = '👥 Attached',
+            value = ('**%s unit(s)**'):format(attachedCount),
+            inline = true
+        }, {
+            name = '🧭 Response Overview',
+            value = responseSummary(call, closedBy),
+            inline = true
+        }, {
+            name = '👮 Responding Units',
+            value = attachedNames(call),
+            inline = false
+        }, {
+            name = '📜 Activity Timeline',
+            value = activityText(activity),
+            inline = false
+        }},
         footer = {
-            text = closedBy
-                and ('Simple911 • Call #%s • Closed'):format(call.id)
-                or ('Simple911 • Call #%s • Live record updates automatically'):format(call.id)
+            text = closedBy and ('Simple911 • Call #%s • Closed'):format(call.id) or
+                ('Simple911 • Call #%s • Live record updates automatically'):format(call.id)
         },
         timestamp = os.date('!%Y-%m-%dT%H:%M:%SZ')
     }
@@ -132,8 +157,12 @@ local function request(url, method, payload, callback)
             log(('Discord response: %s'):format(body or '<empty response>'))
         end
 
-        if callback then callback(statusCode, body, headers) end
-    end, method, json.encode(payload), { ['Content-Type'] = 'application/json' })
+        if callback then
+            callback(statusCode, body, headers)
+        end
+    end, method, json.encode(payload), {
+        ['Content-Type'] = 'application/json'
+    })
 end
 
 local function unitMap(units)
@@ -159,7 +188,7 @@ local function snapshot(call)
         creating = false,
         pendingEdit = false,
         pendingCloseBy = nil,
-        activity = { ('📞 <t:%s:T> • 911 call received'):format(call.createdAt or os.time()) }
+        activity = {('📞 <t:%s:T> • 911 call received'):format(call.createdAt or os.time())}
     }
 end
 
@@ -195,7 +224,8 @@ local function processChanges(tracked, call)
         if call.status == 'enroute' then
             addActivity(tracked, '🔵', 'Response status changed to En Route')
         elseif call.status == 'onscene' then
-            addActivity(tracked, '🟢', ('%s confirmed units On Scene'):format(call.onSceneBy and call.onSceneBy.name or currentPrimaryName or 'A responder'))
+            addActivity(tracked, '🟢', ('%s confirmed units On Scene'):format(
+                call.onSceneBy and call.onSceneBy.name or currentPrimaryName or 'A responder'))
         end
     end
 
@@ -217,12 +247,14 @@ local function editLiveMessage(tracked, call, closedBy)
     request(('%s/messages/%s'):format(baseWebhookUrl(), tracked.messageId), 'PATCH', {
         username = Config.Discord.username or 'Simple911',
         avatar_url = Config.Discord.avatarUrl ~= '' and Config.Discord.avatarUrl or nil,
-        embeds = { mainEmbed(call, tracked.activity, closedBy) }
+        embeds = {mainEmbed(call, tracked.activity, closedBy)}
     })
 end
 
 local function createLiveMessage(call, tracked)
-    if tracked.creating or tracked.messageId then return end
+    if tracked.creating or tracked.messageId then
+        return
+    end
 
     if not discordEnabled() then
         log(('Call #%s was not logged because Discord logging is disabled or no webhook is configured.'):format(call.id))
@@ -235,7 +267,7 @@ local function createLiveMessage(call, tracked)
     request(webhookCreateUrl(), 'POST', {
         username = Config.Discord.username or 'Simple911',
         avatar_url = Config.Discord.avatarUrl ~= '' and Config.Discord.avatarUrl or nil,
-        embeds = { mainEmbed(call, tracked.activity) }
+        embeds = {mainEmbed(call, tracked.activity)}
     }, function(statusCode, body)
         tracked.creating = false
 
@@ -255,13 +287,16 @@ local function createLiveMessage(call, tracked)
             end
         end
 
-        log(('Failed to create Discord log for call #%s. HTTP %s. Body: %s'):format(call.id, tostring(statusCode), body or '<empty>'))
+        log(('Failed to create Discord log for call #%s. HTTP %s. Body: %s'):format(call.id, tostring(statusCode),
+            body or '<empty>'))
     end)
 end
 
 AddEventHandler('simple911:discord:createCall', function(call)
     log(('Received create event for call #%s.'):format(call and call.id or '?'))
-    if not discordEnabled() or type(call) ~= 'table' or not call.id then return end
+    if not discordEnabled() or type(call) ~= 'table' or not call.id then
+        return
+    end
 
     local tracked = snapshot(call)
     TrackedCalls[call.id] = tracked
@@ -269,7 +304,9 @@ AddEventHandler('simple911:discord:createCall', function(call)
 end)
 
 AddEventHandler('simple911:discord:updateCall', function(call)
-    if not discordEnabled() or type(call) ~= 'table' or not call.id then return end
+    if not discordEnabled() or type(call) ~= 'table' or not call.id then
+        return
+    end
 
     local tracked = TrackedCalls[call.id]
     if not tracked then
@@ -284,7 +321,9 @@ AddEventHandler('simple911:discord:updateCall', function(call)
 end)
 
 AddEventHandler('simple911:discord:closeCall', function(call, closedBy)
-    if not discordEnabled() or type(call) ~= 'table' or not call.id then return end
+    if not discordEnabled() or type(call) ~= 'table' or not call.id then
+        return
+    end
 
     local tracked = TrackedCalls[call.id]
     if not tracked then
@@ -332,7 +371,9 @@ RegisterCommand('911discordtest', function(source)
 end, true)
 
 AddEventHandler('onResourceStart', function(resourceName)
-    if resourceName ~= GetCurrentResourceName() then return end
+    if resourceName ~= GetCurrentResourceName() then
+        return
+    end
 
     log('discord.lua loaded successfully.')
 
