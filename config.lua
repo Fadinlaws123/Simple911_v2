@@ -71,8 +71,13 @@ Config.Messages = {
     callsCleared = 'Your local 911 call history has been cleared.',
     focusEnabled = '911 call interaction enabled. Press the focus key again or Escape to return to the game.',
     focusDisabled = '911 call interaction closed.',
-    responding = 'You are now responding to 911 call #%s.',
-    calloutClosed = '911 call #%s has been closed locally.'
+    becamePrimary = 'You are now the primary unit for 911 call #%s.',
+    attached = 'You are now attached to 911 call #%s.',
+    detached = 'You have detached from 911 call #%s.',
+    alreadyPrimary = 'You are already the primary unit for this call.',
+    alreadyAttached = 'You are already attached to this call.',
+    primaryOnlyClose = 'Only the primary unit can close this callout.',
+    callClosedForAll = '911 call #%s was closed by %s.'
 }
 
 Config.Discord = {
