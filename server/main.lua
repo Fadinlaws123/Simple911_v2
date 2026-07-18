@@ -37,10 +37,7 @@ end
 
 local function getUnitProfile(source)
     if not UnitProfiles[source] then
-        UnitProfiles[source] = {
-            callsign = ('%s-%s'):format(Config.CallSettings.defaultCallsignPrefix, source),
-            name = GetPlayerName(source) or ('Responder %s'):format(source)
-        }
+        UnitProfiles[source] = { callsign = ('%s-%s'):format(Config.CallSettings.defaultCallsignPrefix, source), name = GetPlayerName(source) or ('Responder %s'):format(source) }
     end
     UnitProfiles[source].name = GetPlayerName(source) or UnitProfiles[source].name
     return UnitProfiles[source]
@@ -48,23 +45,13 @@ end
 
 local function addTimeline(call, event, actor, text)
     call.timeline = call.timeline or {}
-    call.timeline[#call.timeline + 1] = {
-        event = event,
-        actor = actor,
-        text = text,
-        time = os.time()
-    }
+    call.timeline[#call.timeline + 1] = { event = event, actor = actor, text = text, time = os.time() }
 end
 
 local function publicUnits(units)
     local list = {}
     for source, unit in pairs(units or {}) do
-        list[#list + 1] = {
-            source = source,
-            callsign = unit.callsign,
-            name = unit.name,
-            status = unit.status
-        }
+        list[#list + 1] = { source = source, callsign = unit.callsign, name = unit.name, status = unit.status }
     end
     table.sort(list, function(a, b) return a.callsign < b.callsign end)
     return list
@@ -72,27 +59,12 @@ end
 
 local function publicCall(call)
     return {
-        id = call.id,
-        serviceId = call.serviceId,
-        serviceLabel = call.serviceLabel,
-        templateId = call.templateId,
-        title = call.title,
-        category = call.category,
-        priority = call.priority,
-        message = call.message,
-        callerName = call.callerName,
-        anonymous = call.anonymous,
-        location = call.location,
-        coords = call.coords,
-        status = call.status,
-        claimedBy = call.claimedBy,
-        claimedByName = call.claimedByName,
-        assignedUnits = publicUnits(call.assignedUnits),
-        notes = call.notes or {},
-        timeline = call.timeline or {},
-        createdAt = call.createdAt,
-        updatedAt = call.updatedAt,
-        resolvedByName = call.resolvedByName
+        id = call.id, serviceId = call.serviceId, serviceLabel = call.serviceLabel, templateId = call.templateId,
+        title = call.title, category = call.category, priority = call.priority, message = call.message,
+        callerName = call.callerName, anonymous = call.anonymous, location = call.location, coords = call.coords,
+        status = call.status, claimedBy = call.claimedBy, claimedByName = call.claimedByName,
+        assignedUnits = publicUnits(call.assignedUnits), notes = call.notes or {}, timeline = call.timeline or {},
+        createdAt = call.createdAt, updatedAt = call.updatedAt, resolvedByName = call.resolvedByName
     }
 end
 
@@ -115,17 +87,8 @@ local function getUnitRoster()
         if canReceiveDispatch(source) then
             local profile = getUnitProfile(source)
             local activeCalls = 0
-            for _, call in pairs(Calls) do
-                if call.status ~= 'resolved' and call.assignedUnits and call.assignedUnits[source] then
-                    activeCalls = activeCalls + 1
-                end
-            end
-            list[#list + 1] = {
-                source = source,
-                callsign = profile.callsign,
-                name = profile.name,
-                activeCalls = activeCalls
-            }
+            for _, call in pairs(Calls) do if call.status ~= 'resolved' and call.assignedUnits and call.assignedUnits[source] then activeCalls = activeCalls + 1 end end
+            list[#list + 1] = { source = source, callsign = profile.callsign, name = profile.name, activeCalls = activeCalls }
         end
     end
     table.sort(list, function(a, b) return a.callsign < b.callsign end)
@@ -138,7 +101,7 @@ local function syncResponders()
     for _, playerId in ipairs(GetPlayers()) do
         local source = tonumber(playerId)
         if canReceiveDispatch(source) then
-            TriggerClientEvent('simple911:client:syncDispatch', source, calls, units)
+            TriggerClientEvent('simple911:client:syncDispatch', source, calls, units, getUnitProfile(source))
         end
     end
 end
@@ -148,24 +111,12 @@ local function notify(source, message, kind)
 end
 
 local function notifyCaller(call, message, kind)
-    if Config.Dispatch.notifyCallerOnStatusChange and call.source and GetPlayerName(call.source) then
-        notify(call.source, message, kind)
-    end
+    if Config.Dispatch.notifyCallerOnStatusChange and call.source and GetPlayerName(call.source) then notify(call.source, message, kind) end
 end
 
 local function sendDiscordLog(title, description, color)
     if not Config.Discord.enabled or Config.Discord.webhook == '' then return end
-    PerformHttpRequest(Config.Discord.webhook, function() end, 'POST', json.encode({
-        username = Config.Discord.username,
-        avatar_url = Config.Discord.avatarUrl ~= '' and Config.Discord.avatarUrl or nil,
-        embeds = {{
-            title = title,
-            description = description,
-            color = color or 3447003,
-            footer = { text = 'Simple911 v2' },
-            timestamp = os.date('!%Y-%m-%dT%H:%M:%SZ')
-        }}
-    }), { ['Content-Type'] = 'application/json' })
+    PerformHttpRequest(Config.Discord.webhook, function() end, 'POST', json.encode({ username = Config.Discord.username, avatar_url = Config.Discord.avatarUrl ~= '' and Config.Discord.avatarUrl or nil, embeds = {{ title = title, description = description, color = color or 3447003, footer = { text = 'Simple911 v2' }, timestamp = os.date('!%Y-%m-%dT%H:%M:%SZ') }} }), { ['Content-Type'] = 'application/json' })
 end
 
 local function buildCall(source, service, template, data)
@@ -173,29 +124,13 @@ local function buildCall(source, service, template, data)
     NextCallId = NextCallId + 1
     local anonymous = source and service.allowAnonymous and data.anonymous == true
     local playerName = source and (GetPlayerName(source) or ('Player %s'):format(source)) or sanitizeText(data.callerName or 'System', 80)
-
     local call = {
-        id = NextCallId,
-        source = source,
-        serviceId = service.id,
-        serviceLabel = service.label,
-        templateId = template.id,
-        title = template.label,
-        category = template.category,
-        priority = tonumber(data.priority) or template.priority,
+        id = NextCallId, source = source, serviceId = service.id, serviceLabel = service.label, templateId = template.id,
+        title = template.label, category = template.category, priority = tonumber(data.priority) or template.priority,
         message = sanitizeText(data.message or template.message, Config.CallSettings.maxMessageLength),
-        callerName = anonymous and Config.CallSettings.anonymousLabel or playerName,
-        anonymous = anonymous or false,
-        location = sanitizeText(data.location or 'Unknown Location', 120),
-        coords = data.coords,
-        status = 'unassigned',
-        claimedBy = nil,
-        claimedByName = nil,
-        assignedUnits = {},
-        notes = {},
-        timeline = {},
-        createdAt = now,
-        updatedAt = now
+        callerName = anonymous and Config.CallSettings.anonymousLabel or playerName, anonymous = anonymous or false,
+        location = sanitizeText(data.location or 'Unknown Location', 120), coords = data.coords, status = 'unassigned',
+        claimedBy = nil, claimedByName = nil, assignedUnits = {}, notes = {}, timeline = {}, createdAt = now, updatedAt = now
     }
     addTimeline(call, 'created', call.callerName, 'Call created')
     return call
@@ -204,42 +139,24 @@ end
 RegisterNetEvent('simple911:server:createCall', function(data)
     local source = source
     if type(data) ~= 'table' then return end
-
     local service = getService(data.serviceId)
     local template = getTemplate(service, data.templateId)
     if not service or not template then return notify(source, 'That call type is not available.', 'error') end
-
     local now = os.time()
-    if Config.Cooldown.enabled and Cooldowns[source] and now - Cooldowns[source] < Config.Cooldown.seconds then
-        return notify(source, ('Please wait %s seconds before creating another call.'):format(Config.Cooldown.seconds - (now - Cooldowns[source])), 'error')
-    end
-
+    if Config.Cooldown.enabled and Cooldowns[source] and now - Cooldowns[source] < Config.Cooldown.seconds then return notify(source, ('Please wait %s seconds before creating another call.'):format(Config.Cooldown.seconds - (now - Cooldowns[source])), 'error') end
     local activeCount = 0
     for _, call in pairs(Calls) do if call.status ~= 'resolved' then activeCount = activeCount + 1 end end
     if activeCount >= Config.CallSettings.maxActiveCalls then return notify(source, 'Dispatch is currently at maximum call capacity.', 'error') end
-
     local message = sanitizeText(data.message, Config.CallSettings.maxMessageLength)
     if message == '' then return notify(source, 'Please provide details for your call.', 'error') end
-
     local coords = data.coords
     if type(coords) ~= 'table' or type(coords.x) ~= 'number' or type(coords.y) ~= 'number' or type(coords.z) ~= 'number' then coords = nil end
-
-    local call = buildCall(source, service, template, {
-        message = message,
-        anonymous = data.anonymous,
-        location = data.location,
-        coords = coords
-    })
-
+    local call = buildCall(source, service, template, { message = message, anonymous = data.anonymous, location = data.location, coords = coords })
     Calls[call.id] = call
     Cooldowns[source] = now
     LastCallBySource[source] = call.id
     notify(source, ('Your %s call #%s has been submitted.'):format(service.shortLabel, call.id), 'success')
-
-    for _, playerId in ipairs(GetPlayers()) do
-        local responder = tonumber(playerId)
-        if canReceiveDispatch(responder) then TriggerClientEvent('simple911:client:newCall', responder, publicCall(call)) end
-    end
+    for _, playerId in ipairs(GetPlayers()) do local responder = tonumber(playerId) if canReceiveDispatch(responder) then TriggerClientEvent('simple911:client:newCall', responder, publicCall(call)) end end
     syncResponders()
     sendDiscordLog(('New %s Call #%s'):format(service.shortLabel, call.id), ('**Type:** %s\n**Location:** %s\n**Caller:** %s\n**Details:** %s'):format(call.title, call.location, call.callerName, call.message), 15158332)
 end)
@@ -247,7 +164,7 @@ end)
 RegisterNetEvent('simple911:server:requestDispatch', function()
     local source = source
     if not canReceiveDispatch(source) then return end
-    TriggerClientEvent('simple911:client:syncDispatch', source, getCallList(), getUnitRoster())
+    TriggerClientEvent('simple911:client:syncDispatch', source, getCallList(), getUnitRoster(), getUnitProfile(source))
 end)
 
 RegisterNetEvent('simple911:server:setDuty', function(state)
@@ -275,21 +192,15 @@ RegisterNetEvent('simple911:server:updateCall', function(callId, action, payload
     callId = tonumber(callId)
     local call = callId and Calls[callId]
     if not call then return end
-
     local profile = getUnitProfile(source)
     local actor = ('%s (%s)'):format(profile.callsign, profile.name)
     call.assignedUnits = call.assignedUnits or {}
 
     if action == 'claim' or action == 'respond' then
         if call.status == 'resolved' then return end
-        if not Config.Dispatch.allowMultipleUnits then
-            call.assignedUnits = {}
-        end
+        if not Config.Dispatch.allowMultipleUnits then call.assignedUnits = {} end
         call.assignedUnits[source] = { callsign = profile.callsign, name = profile.name, status = action == 'respond' and 'responding' or 'assigned' }
-        if not call.claimedBy then
-            call.claimedBy = source
-            call.claimedByName = profile.callsign
-        end
+        if not call.claimedBy then call.claimedBy = source call.claimedByName = profile.callsign end
         if action == 'respond' then
             call.status = 'responding'
             addTimeline(call, 'responding', actor, 'Unit responding')
@@ -303,25 +214,16 @@ RegisterNetEvent('simple911:server:updateCall', function(callId, action, payload
         call.assignedUnits[source] = nil
         addTimeline(call, 'unassigned_unit', actor, 'Unit removed from call')
         if call.claimedBy == source then
-            call.claimedBy = nil
-            call.claimedByName = nil
-            for assignedSource, unit in pairs(call.assignedUnits) do
-                call.claimedBy = assignedSource
-                call.claimedByName = unit.callsign
-                break
-            end
+            call.claimedBy = nil call.claimedByName = nil
+            for assignedSource, unit in pairs(call.assignedUnits) do call.claimedBy = assignedSource call.claimedByName = unit.callsign break end
         end
         if next(call.assignedUnits) == nil then call.status = 'unassigned' end
     elseif action == 'resolve' then
         if call.status == 'resolved' then return end
-        call.status = 'resolved'
-        call.resolvedBy = source
-        call.resolvedByName = profile.callsign
+        call.status = 'resolved' call.resolvedBy = source call.resolvedByName = profile.callsign
         addTimeline(call, 'resolved', actor, 'Call resolved')
         notifyCaller(call, ('Your call #%s has been marked resolved.'):format(call.id), 'success')
-        SetTimeout(Config.CallSettings.resolvedRetentionSeconds * 1000, function()
-            if Calls[callId] and Calls[callId].status == 'resolved' then Calls[callId] = nil syncResponders() end
-        end)
+        SetTimeout(Config.CallSettings.resolvedRetentionSeconds * 1000, function() if Calls[callId] and Calls[callId].status == 'resolved' then Calls[callId] = nil syncResponders() end end)
     elseif action == 'note' then
         local note = sanitizeText(payload and payload.note, Config.CallSettings.maxNoteLength)
         if note == '' then return end
@@ -333,14 +235,10 @@ RegisterNetEvent('simple911:server:updateCall', function(callId, action, payload
         if priority ~= 1 and priority ~= 2 and priority ~= 3 then return end
         call.priority = priority
         addTimeline(call, 'priority', actor, ('Priority changed to %s'):format(priority))
-    else
-        return
-    end
+    else return end
 
     call.updatedAt = os.time()
-    if Config.Discord.logStatusChanges and action ~= 'note' then
-        sendDiscordLog(('Call #%s Updated'):format(call.id), ('**Action:** %s\n**Unit:** %s\n**Status:** %s'):format(action, actor, call.status), 3447003)
-    end
+    if Config.Discord.logStatusChanges and action ~= 'note' then sendDiscordLog(('Call #%s Updated'):format(call.id), ('**Action:** %s\n**Unit:** %s\n**Status:** %s'):format(action, actor, call.status), 3447003) end
     syncResponders()
 end)
 
@@ -350,9 +248,7 @@ RegisterNetEvent('simple911:server:cancelLastCall', function()
     local callId = LastCallBySource[source]
     local call = callId and Calls[callId]
     if not call or call.source ~= source or call.status == 'resolved' then return notify(source, 'You do not have an active call to cancel.', 'error') end
-    call.status = 'resolved'
-    call.resolvedByName = 'Caller Cancelled'
-    call.updatedAt = os.time()
+    call.status = 'resolved' call.resolvedByName = 'Caller Cancelled' call.updatedAt = os.time()
     addTimeline(call, 'cancelled', call.callerName, 'Caller cancelled the call')
     notify(source, ('Call #%s has been cancelled.'):format(call.id), 'success')
     LastCallBySource[source] = nil
@@ -361,9 +257,7 @@ end)
 
 AddEventHandler('playerDropped', function()
     local source = source
-    Cooldowns[source] = nil
-    OnDuty[source] = nil
-    UnitProfiles[source] = nil
+    Cooldowns[source] = nil OnDuty[source] = nil UnitProfiles[source] = nil
     for _, call in pairs(Calls) do
         if call.assignedUnits and call.assignedUnits[source] then
             call.assignedUnits[source] = nil
@@ -386,11 +280,5 @@ exports('CreateCall', function(data)
     return true, call.id
 end)
 
-exports('GetCall', function(callId)
-    local call = Calls[tonumber(callId)]
-    return call and publicCall(call) or nil
-end)
-
-exports('GetActiveCalls', function()
-    return getCallList()
-end)
+exports('GetCall', function(callId) local call = Calls[tonumber(callId)] return call and publicCall(call) or nil end)
+exports('GetActiveCalls', function() return getCallList() end)
