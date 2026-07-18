@@ -3,8 +3,6 @@ local Blips = {}
 local VisibleCards = {}
 local Focused = false
 
--- FiveM control IDs used for direct configurable key handling.
--- This avoids persisted RegisterKeyMapping binds overriding config changes.
 local FocusControls = {
     A = 34, B = 29, C = 26, D = 35, E = 38, F = 23, G = 47, H = 74,
     K = 311, L = 182, M = 244, N = 249, Q = 44, R = 45, S = 33,
@@ -47,17 +45,14 @@ end
 local function removeCallBlips(callId)
     local list = Blips[callId]
     if not list then return end
-
     for _, blip in ipairs(list) do
         if DoesBlipExist(blip) then RemoveBlip(blip) end
     end
-
     Blips[callId] = nil
 end
 
 local function addCallBlip(call)
     if not Config.Blip.enabled or not call.coords then return end
-
     removeCallBlips(call.id)
 
     local created = {}
@@ -83,9 +78,7 @@ local function addCallBlip(call)
 
     SetTimeout(Config.Blip.durationSeconds * 1000, function()
         local current = Calls[call.id]
-        if current and current.status ~= 'enroute' then
-            removeCallBlips(call.id)
-        end
+        if current and current.status ~= 'enroute' then removeCallBlips(call.id) end
     end)
 end
 
@@ -96,7 +89,6 @@ local function setWaypoint(callId)
         notify(Config.Messages.invalidCall, 'error')
         return false
     end
-
     SetNewWaypoint(call.coords.x, call.coords.y)
     notify(Config.Messages.waypointSet:format(call.id), 'success')
     return true
@@ -123,10 +115,7 @@ local function toggleFocus()
         notify(Config.Messages.focusDisabled, 'info')
         return
     end
-
-    if setFocus(true) then
-        notify(Config.Messages.focusEnabled, 'info')
-    end
+    if setFocus(true) then notify(Config.Messages.focusEnabled, 'info') end
 end
 
 local function sendCallToUi(action, call, duration)
@@ -138,6 +127,22 @@ local function sendCallToUi(action, call, duration)
         showCallerServerId = Config.CallSettings.showCallerServerId,
         selfServerId = GetPlayerServerId(PlayerId()),
         focusKey = getConfiguredFocusKey()
+    })
+end
+
+local function sendResponderChatCall(call)
+    if not Config.Notifications.showChatMessage then return end
+
+    TriggerEvent('chat:addMessage', {
+        template = Config.Notifications.chatTemplate,
+        multiline = true,
+        args = {
+            tostring(call.id),
+            tostring(call.location or 'Unknown Location'),
+            tostring(call.message or ''),
+            getConfiguredFocusKey(),
+            Config.Commands.waypoint
+        }
     })
 end
 
@@ -205,22 +210,7 @@ RegisterNetEvent('simple911:client:receiveCall', function(call)
         sendCallToUi('newCall', call, Config.Notifications.popupDuration)
     end
 
-    if Config.Notifications.showChatMessage then
-        TriggerEvent('chat:addMessage', {
-            color = { 255, 82, 82 },
-            multiline = true,
-            args = {
-                ('911 CALL #%s'):format(call.id),
-                ('%s\n%s\nPress [%s] to interact with the call card or use /%s %s to set a waypoint.'):format(
-                    call.location,
-                    call.message,
-                    getConfiguredFocusKey(),
-                    Config.Commands.waypoint,
-                    call.id
-                )
-            }
-        })
-    end
+    sendResponderChatCall(call)
 
     SetTimeout(Config.Notifications.popupDuration, function()
         local current = Calls[call.id]
@@ -348,7 +338,7 @@ CreateThread(function()
 
         if control and hasVisibleCards() and not Focused then
             waitTime = 0
-            if IsControlJustReleased(0, control) then
+            if IsControlJustPressed(0, control) or IsDisabledControlJustPressed(0, control) then
                 toggleFocus()
             end
         elseif not control and not warnedInvalidKey then
