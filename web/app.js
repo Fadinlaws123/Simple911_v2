@@ -2,6 +2,8 @@ const toastStack = document.getElementById('toastStack');
 const alertStack = document.getElementById('alertStack');
 const callsPanel = document.getElementById('callsPanel');
 const callsList = document.getElementById('callsList');
+const callStates = new Map();
+let focused = false;
 
 const resource = () => typeof GetParentResourceName === 'function' ? GetParentResourceName() : 'Simple911_v2';
 const post = (name, data = {}) => fetch(`https://${resource()}/${name}`, {
@@ -30,35 +32,94 @@ function toast(message, kind = 'info') {
     setTimeout(() => element.remove(), 5000);
 }
 
-function showCallAlert(data) {
-    const call = data.call;
-    const element = document.createElement('article');
-    element.className = 'call-alert';
+function renderAlertCard(callId) {
+    const state = callStates.get(Number(callId));
+    if (!state || !state.element) return;
+
+    const { call, data, status, element } = state;
+    const isEnroute = status === 'enroute';
+
+    element.className = `call-alert${isEnroute ? ' enroute' : ''}`;
     element.innerHTML = `
         <div class="alert-accent"></div>
         <div class="alert-body">
             <div class="alert-top">
                 <div>
-                    <span class="eyebrow">Incoming 911 Call</span>
-                    <h3>Call #${call.id}</h3>
+                    <span class="eyebrow">${isEnroute ? 'Active 911 Callout' : 'Incoming 911 Call'}</span>
+                    <h3>${isEnroute ? 'En Route' : `Call #${call.id}`}</h3>
                 </div>
-                <button class="alert-close" aria-label="Dismiss">×</button>
+                <span class="status-pill ${isEnroute ? 'status-enroute' : 'status-new'}">${isEnroute ? 'EN ROUTE' : 'NEW'}</span>
             </div>
             <div class="alert-location">${escapeHtml(call.location)}</div>
             <p>${escapeHtml(call.message)}</p>
             ${(data.showCallerName || data.showCallerServerId) ? `<div class="alert-caller">${data.showCallerName ? escapeHtml(call.callerName) : ''}${data.showCallerServerId ? ` · ID ${call.callerId}` : ''}</div>` : ''}
             <div class="alert-actions">
-                <button class="waypoint-button">Set Waypoint</button>
-                <span>${relativeTime(call.createdAt)}</span>
+                ${isEnroute
+                    ? `<button class="close-callout-button">Close Callout</button>`
+                    : `<button class="respond-button">Respond & Set Waypoint</button>`}
+                <span>${focused ? 'Interaction enabled' : `Press ${escapeHtml(data.focusKey || 'F6')} to interact`}</span>
             </div>
         </div>`;
 
-    element.querySelector('.alert-close').addEventListener('click', () => element.remove());
-    element.querySelector('.waypoint-button').addEventListener('click', () => post('waypoint', { callId: call.id }));
+    const respondButton = element.querySelector('.respond-button');
+    if (respondButton) {
+        respondButton.addEventListener('click', () => {
+            if (!focused) return;
+            post('respondCall', { callId: call.id });
+        });
+    }
+
+    const closeButton = element.querySelector('.close-callout-button');
+    if (closeButton) {
+        closeButton.addEventListener('click', () => {
+            if (!focused) return;
+            post('closeCallout', { callId: call.id });
+        });
+    }
+}
+
+function showCallAlert(data) {
+    const call = data.call;
+    const element = document.createElement('article');
     alertStack.prepend(element);
 
+    callStates.set(Number(call.id), {
+        call,
+        data,
+        element,
+        status: data.responding ? 'enroute' : 'new'
+    });
+
+    renderAlertCard(call.id);
+
     const duration = Number(data.duration) || 12000;
-    setTimeout(() => element.remove(), duration);
+    if (!data.responding) {
+        setTimeout(() => {
+            const state = callStates.get(Number(call.id));
+            if (state && state.status === 'new' && state.element?.isConnected) {
+                state.element.remove();
+                callStates.delete(Number(call.id));
+            }
+        }, duration);
+    }
+}
+
+function setFocusState(value) {
+    focused = Boolean(value);
+    callStates.forEach((_, callId) => renderAlertCard(callId));
+}
+
+function updateCallStatus(callId, status) {
+    const state = callStates.get(Number(callId));
+    if (!state) return;
+    state.status = status;
+    renderAlertCard(callId);
+}
+
+function removeCall(callId) {
+    const state = callStates.get(Number(callId));
+    if (state?.element) state.element.remove();
+    callStates.delete(Number(callId));
 }
 
 function openCalls(data) {
@@ -90,7 +151,10 @@ function openCalls(data) {
 
 document.getElementById('closeCalls').addEventListener('click', () => post('close'));
 window.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && !callsPanel.classList.contains('hidden')) post('close');
+    if (event.key === 'Escape') {
+        if (!callsPanel.classList.contains('hidden')) post('close');
+        else if (focused) post('releaseFocus');
+    }
 });
 
 window.addEventListener('message', event => {
@@ -100,4 +164,7 @@ window.addEventListener('message', event => {
     if (data.action === 'openCalls') openCalls(data);
     if (data.action === 'closeCalls') callsPanel.classList.add('hidden');
     if (data.action === 'syncCalls' && Array.isArray(data.calls) && !callsPanel.classList.contains('hidden')) openCalls(data);
+    if (data.action === 'setFocusState') setFocusState(data.focused);
+    if (data.action === 'callStatusChanged') updateCallStatus(data.callId, data.status);
+    if (data.action === 'removeCall') removeCall(data.callId);
 });
